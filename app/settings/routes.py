@@ -4,7 +4,7 @@ import os
 import stat
 from pathlib import Path
 
-from flask import Blueprint, flash, redirect, render_template, request, url_for
+from flask import Blueprint, flash, redirect, render_template, request, send_file, url_for
 from werkzeug.utils import secure_filename
 
 from app.shared.config_service import AppConfig
@@ -198,6 +198,17 @@ def create_settings_blueprint(
         else:
             flash(f"Week starting {week_start_str} not found.", "danger")
         return redirect(url_for("settings.settings_page"))
+
+    @bp.route("/export-data", methods=["GET"])
+    def export_data() -> object:
+        if store is None or not store.path.exists():
+            flash("No data file available to export.", "warning")
+            return redirect(url_for("settings.settings_page"))
+        return send_file(
+            store.path,
+            as_attachment=True,
+            download_name=store.path.name,
+        )
 
     @bp.route("/clear-all", methods=["POST"])
     def clear_all_data() -> object:

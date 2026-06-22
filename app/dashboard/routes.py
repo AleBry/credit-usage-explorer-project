@@ -7,10 +7,16 @@ from flask import Blueprint, flash, redirect, render_template, request, url_for
 from werkzeug.utils import secure_filename
 
 from app.shared.config_service import AppConfig
+from app.shared.data_merge import merge_usage_data
 from app.shared.data_store import CreditUsageData, DataStore
 from app.shared.ingestion import IngestionPipeline
 from app.forecast.service import ChartDataBuilder, ForecastingService
 from .service import compute_outlier_users, compute_summary_metrics, compute_weekly_trend
+
+DERIVED_COLS = {
+    "usage_type_parsed_type", "usage_type_model", "usage_type_date",
+    "usage_type_medium", "usage_type_io",
+}
 
 
 def create_dashboard_blueprint(
@@ -100,7 +106,7 @@ def create_dashboard_blueprint(
 
     @bp.route("/upload-data", methods=["POST"])
     def upload_data() -> object:
-        from config import CURRENT_DATA_PATH, CURRENT_DATA_PATH_CACHE
+        from config import CURRENT_DATA_PATH, CURRENT_DATA_PATH_CACHE, DEFAULT_DATA_PATH
 
         if "file" not in request.files or not request.files["file"].filename:
             flash("No file selected.", "danger")
@@ -112,6 +118,17 @@ def create_dashboard_blueprint(
             flash(f"Unsupported file type '{suffix}'. Upload an .xlsx, .xls, or .csv.", "danger")
             return redirect(url_for("main.summary_page"))
 
+        # Capture existing data before overwriting anything on disk
+        has_existing = (
+            store.path != DEFAULT_DATA_PATH
+            and not store.data.df.empty
+        )
+        existing_df = (
+            store.data.df.drop(columns=[c for c in DERIVED_COLS if c in store.data.df.columns], errors="ignore")
+            if has_existing else None
+        )
+        prior_rows = len(existing_df) if has_existing else 0
+
         saved_path = CURRENT_DATA_PATH.with_suffix(suffix)
         saved_path.parent.mkdir(parents=True, exist_ok=True)
         try:
@@ -121,9 +138,46 @@ def create_dashboard_blueprint(
             return redirect(url_for("main.summary_page"))
 
         try:
+            if suffix in (".xlsx", ".xls"):
+                new_df = pd.read_excel(saved_path, sheet_name=0)
+            else:
+                try:
+                    new_df = pd.read_csv(saved_path, encoding="utf-8-sig")
+                except UnicodeDecodeError:
+                    new_df = pd.read_csv(saved_path, encoding="cp1252")
+
+            # Order-independent merge: canonicalizes dates, dedupes overlapping
+            # records, and resolves value conflicts by keeping the larger credits.
+            merged = merge_usage_data(existing_df, new_df)
+
+            if suffix in (".xlsx", ".xls"):
+                merged.to_excel(saved_path, index=False)
+            else:
+                merged.to_csv(saved_path, index=False)
+        except Exception as exc:
+            flash(f"Error processing uploaded data: {exc}", "danger")
+            return redirect(url_for("main.summary_page"))
+
+        try:
             store.reload(saved_path)
             CURRENT_DATA_PATH_CACHE.write_text(str(saved_path))
-            flash(f"Data loaded: {len(store.data.df):,} records from \"{file.filename}\".", "success")
+            total = len(store.data.df)
+            if has_existing:
+                added = total - prior_rows
+                if added > 0:
+                    flash(
+                        f"Data merged: {added:,} new record{'s' if added != 1 else ''} added "
+                        f"from \"{file.filename}\" ({total:,} total).",
+                        "success",
+                    )
+                else:
+                    flash(
+                        f"No new records added — \"{file.filename}\" fully overlaps existing "
+                        f"data ({total:,} total).",
+                        "info",
+                    )
+            else:
+                flash(f"Data loaded: {total:,} records from \"{file.filename}\".", "success")
         except Exception as exc:
             flash(f"Error loading file: {exc}", "danger")
             return redirect(url_for("main.summary_page"))

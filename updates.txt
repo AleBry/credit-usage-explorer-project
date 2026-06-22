@@ -1,0 +1,70 @@
+================================================================
+UPDATES LOG
+================================================================
+
+----------------------------------------------------------------
+2026-06-22
+----------------------------------------------------------------
+
+DATA APPENDING / MERGING (foolproof, order-independent)
+- Added new shared module: app/shared/data_merge.py
+    * normalize_date_partition() - rewrites date_partition to canonical
+      ISO (YYYY-MM-DD). Each file is parsed while still single-format so
+      mixed formats (e.g. M/D/YYYY vs YYYY-MM-DD) can no longer corrupt
+      comparison or storage.
+    * merge_usage_data(existing, new) - single entry point for merging an
+      uploaded file into the current data. Safe when there is no existing
+      data (fresh load).
+    * dedupe_usage() - keeps one row per natural record key
+      (date_partition, account_id, user id, usage_type). On a value
+      conflict the larger usage_credits is kept. Because max is
+      commutative, the merged result is identical regardless of upload
+      order. Falls back to exact-row dedup if a safe key cannot be built.
+
+- Refactored app/dashboard/routes.py (upload-data handler):
+    * Now reads the file and delegates to merge_usage_data().
+    * Removed the previous inline append/dedup logic.
+    * Upload now reports how many genuinely new records were added vs a
+      full-overlap no-op, and surfaces errors as a flash message instead
+      of failing.
+
+BEHAVIOR GUARANTEES
+- Overlapping files: each record counted once, never double-counted.
+- Conflicting values for the same day/user/usage_type: larger credits
+  wins, deterministically.
+- Different date formats across files: normalized before any comparison.
+- Any upload order: identical final result.
+- Bad/unexpected files: handled gracefully (flash message, no crash).
+- Filenames are ignored for date logic; only the in-file date_partition
+  values are used (export filenames did not reflect actual data ranges).
+
+NOTE ON CONFLICT RULE
+- Current rule is "largest credits wins" (assumes a fuller export
+  supersedes a partial one). Switching to "most recently uploaded wins"
+  is a one-line change in dedupe_usage(), but would reintroduce
+  order-dependence, so it was intentionally not used.
+
+EARLIER SAME-DAY WORK
+- Settings page: added "Export Data" section to download the current
+  data file; tier tabs no longer show a horizontal scrollbar (wrap
+  instead).
+- Forecast page: added "Generate weekly" button to create one snapshot
+  per operational week automatically (derives weekly data from the daily
+  store when no pipeline weekly data exists; skips Monte Carlo for speed
+  and skips weeks already snapshotted). Snapshot rename changed from
+  double-click to an explicit pencil icon.
+
+TESTING / HOUSEKEEPING
+- Consolidated all scratch test scripts into testfiles/:
+    * test_data_merge.py - mock order-independence, conflict resolution,
+      mixed date formats, and a real-file round-trip through DataStore.
+    * diagnose_data.py - inspects a batch of files for date ranges,
+      record-key uniqueness, and cross-file value conflicts.
+- Removed the temporary scripts from the project root; root now contains
+  only config.py and run.py.
+- All test-file paths resolve relatively from the repo root (no absolute
+  or user-specific paths hard-coded).
+- Verified: full test suite passes and the Flask app factory imports
+  cleanly.
+
+================================================================

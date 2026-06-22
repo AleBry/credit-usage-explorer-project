@@ -271,6 +271,71 @@ def create_forecast_blueprint(
             return (err or "Color update failed.", 500)
         return ("", 204)
 
+    @bp.route("/forecast/snapshot/generate-weekly", methods=["POST"])
+    def generate_weekly_snapshots() -> object:
+        config = copy.deepcopy(config_svc.load_contract())
+        hist_df = pipeline.get_historical_weekly_summary()
+        op_df = pipeline.get_operational_weekly_summary()
+
+        # If no pipeline operational data, derive weekly summaries from the daily store data
+        if (op_df is None or op_df.empty) and store is not None:
+            daily_df = _get_store_df()
+            if daily_df is not None and not daily_df.empty:
+                _tmp = ForecastingService(config, hist_df, None, daily_df)
+                if _tmp.operational_df is not None and not _tmp.operational_df.empty:
+                    op_df = _tmp.operational_df
+                if hist_df is None and _tmp.historical_df is not None:
+                    hist_df = _tmp.historical_df
+
+        if op_df is None or op_df.empty:
+            flash("No data available. Upload a data sheet on the Summary page first.", "warning")
+            return redirect(url_for("forecast.forecast_page"))
+
+        existing_labels = {h.get("label", "") for h in pipeline.get_forecast_history()}
+        op_sorted = op_df.sort_values("week_start").reset_index(drop=True)
+        generated = skipped = errors = 0
+
+        for i in range(len(op_sorted)):
+            row = op_sorted.iloc[i]
+            week_end_str = str(_pd.Timestamp(row["week_end"]).date())
+            label = f"Week of {week_end_str}"
+
+            if label in existing_labels:
+                skipped += 1
+                continue
+
+            # Build a service that only sees data through this week
+            truncated_op = op_sorted.iloc[: i + 1].copy()
+            try:
+                svc = ForecastingService(config, hist_df, truncated_op)
+                if not svc.has_data():
+                    errors += 1
+                    continue
+                svc.save_to_dir(
+                    pipeline.processed_dir,
+                    once_per_day=False,
+                    label=label,
+                    snapshot_ts=f"{week_end_str}T00:00:00",
+                    snapshot_date=week_end_str,
+                    skip_mc=True,
+                )
+                existing_labels.add(label)
+                generated += 1
+            except Exception:
+                errors += 1
+
+        parts = []
+        if generated:
+            parts.append(f"{generated} snapshot{'s' if generated != 1 else ''} generated")
+        if skipped:
+            parts.append(f"{skipped} already existed")
+        if errors:
+            parts.append(f"{errors} failed")
+
+        level = "success" if generated else ("info" if skipped else "warning")
+        flash(", ".join(parts) + "." if parts else "Nothing to generate.", level)
+        return redirect(url_for("forecast.forecast_page"))
+
     @bp.route("/forecast/model-data", methods=["GET"])
     def model_data() -> object:
         model_id = request.args.get("model", "monte_carlo")

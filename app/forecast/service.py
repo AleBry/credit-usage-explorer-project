@@ -408,12 +408,22 @@ class ForecastingService:
         tmp.write_text(json.dumps(data), encoding="utf-8")
         tmp.replace(path)
 
-    def save_to_dir(self, processed_dir: Path, *, once_per_day: bool = True, label: str = "") -> None:
+    def save_to_dir(
+        self,
+        processed_dir: Path,
+        *,
+        once_per_day: bool = True,
+        label: str = "",
+        snapshot_ts: str = "",
+        snapshot_date: str = "",
+        skip_mc: bool = False,
+    ) -> None:
         processed_dir.mkdir(parents=True, exist_ok=True)
 
         today_str = str(date.today())
+        _snap_date = snapshot_date or today_str
 
-        if once_per_day:
+        if once_per_day and not snapshot_ts:
             marker = processed_dir / self._AUTOSAVE_MARKER
             if marker.exists() and marker.read_text().strip() == today_str:
                 return
@@ -421,27 +431,29 @@ class ForecastingService:
         cs = self.get_contract_status()
         fc = self.get_forecast()
 
-        pd.DataFrame([cs]).to_csv(processed_dir / "contract_status_summary.csv", index=False)
-        pd.DataFrame([fc]).to_csv(processed_dir / "forecast_summary.csv", index=False)
+        if not snapshot_ts:
+            pd.DataFrame([cs]).to_csv(processed_dir / "contract_status_summary.csv", index=False)
+            pd.DataFrame([fc]).to_csv(processed_dir / "forecast_summary.csv", index=False)
 
         mc_result = None
         mc_stats: dict = {}
-        try:
-            mc_result = self._run_mc(cs, fc)
-            mc_stats = {
-                "mc_runs": mc_result.metadata.get("runs"),
-                "mc_exhaustion_prob": mc_result.metadata.get("exhaustion_probability"),
-                "mc_p10_end_balance": round(mc_result.p10[-1]["value"], 1) if mc_result.p10 else None,
-                "mc_p50_end_balance": round(mc_result.burndown[-1]["value"], 1) if mc_result.burndown else None,
-                "mc_p90_end_balance": round(mc_result.p90[-1]["value"], 1) if mc_result.p90 else None,
-            }
-        except Exception:
-            pass
+        if not skip_mc:
+            try:
+                mc_result = self._run_mc(cs, fc)
+                mc_stats = {
+                    "mc_runs": mc_result.metadata.get("runs"),
+                    "mc_exhaustion_prob": mc_result.metadata.get("exhaustion_probability"),
+                    "mc_p10_end_balance": round(mc_result.p10[-1]["value"], 1) if mc_result.p10 else None,
+                    "mc_p50_end_balance": round(mc_result.burndown[-1]["value"], 1) if mc_result.burndown else None,
+                    "mc_p90_end_balance": round(mc_result.p90[-1]["value"], 1) if mc_result.p90 else None,
+                }
+            except Exception:
+                pass
 
-        snapshot_ts = datetime.now().isoformat(timespec="seconds")
+        _snap_ts = snapshot_ts or datetime.now().isoformat(timespec="seconds")
         snapshot = {
-            "snapshot_date": today_str,
-            "snapshot_ts": snapshot_ts,
+            "snapshot_date": _snap_date,
+            "snapshot_ts": _snap_ts,
             "label": label,
             **{k: str(v) if hasattr(v, "strftime") else v for k, v in {**cs, **fc}.items()},
             **mc_stats,
@@ -457,11 +469,11 @@ class ForecastingService:
         combined.sort_values("snapshot_date").to_csv(history_path, index=False)
 
         try:
-            self._save_snapshot_series(processed_dir, snapshot_ts, snapshot, mc_result)
+            self._save_snapshot_series(processed_dir, _snap_ts, snapshot, mc_result)
         except Exception:
             pass
 
-        if once_per_day:
+        if once_per_day and not snapshot_ts:
             (processed_dir / self._AUTOSAVE_MARKER).write_text(today_str)
 
     def get_weekly_chart_data(self) -> list[dict[str, Any]]:

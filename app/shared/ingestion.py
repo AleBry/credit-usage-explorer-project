@@ -98,6 +98,16 @@ class IngestionPipeline:
         df["is_credit_active"] = df["credits_used"] > 0
         df["is_message_active"] = df["messages"] > 0
 
+        existing_path = self.processed_dir / self.HISTORICAL_USAGE_CLEANED
+        if existing_path.exists():
+            existing = pd.read_csv(existing_path)
+            existing["period_start"] = pd.to_datetime(existing["period_start"])
+            existing["period_end"] = pd.to_datetime(existing["period_end"])
+            df = pd.concat([existing, df], ignore_index=True)
+            df = df.drop_duplicates(subset=["period_start", "period_end", "email"], keep="last")
+
+        df = df.sort_values(["period_start", "email"]).reset_index(drop=True)
+
         weekly = (
             df.groupby(["period_start", "period_end"], as_index=False)
             .agg(

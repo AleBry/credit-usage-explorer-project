@@ -540,20 +540,28 @@
   </div>
 
   <!-- Snapshot History -->
-  {% if forecast_history %}
   <div class="section-label">Snapshot History</div>
   <div class="dash-section mb-4">
     <div class="dash-section-header">
       <span class="dash-section-title">History</span>
+      {% if forecast_history %}
       <span style="font-size:.72rem; color:#8a92a0;">
         {{ forecast_history | length }} snapshot{{ 's' if forecast_history | length != 1 }}
         &nbsp;·&nbsp; <span id="compare-hint" style="color:#0d6efd; display:none;">select 2+ rows to overlay on burndown chart</span>
       </span>
-      <span class="ms-auto d-flex gap-2">
-        <button class="btn btn-outline-secondary btn-sm py-0 px-2" style="font-size:.72rem;" onclick="selectAllSnaps()">Select All</button>
+      {% endif %}
+      <span class="ms-auto d-flex gap-2 align-items-center">
+        <form method="post" action="{{ url_for('forecast.generate_weekly_snapshots') }}" style="display:inline;" onsubmit="return confirm('Generate a snapshot for each operational week? This may take a moment.');">
+          <button class="btn btn-outline-primary btn-sm py-0 px-2" style="font-size:.72rem;" type="submit" title="Create one snapshot per operational week">&#x1F4C5; Generate weekly</button>
+        </form>
+        {% if forecast_history %}
+        <button class="btn btn-outline-secondary btn-sm py-0 px-2" style="font-size:.72rem;" onclick="selectAllSnaps()">Select all</button>
         <button class="btn btn-outline-secondary btn-sm py-0 px-2" style="font-size:.72rem;" onclick="clearComparison()">Clear</button>
+        {% endif %}
       </span>
     </div>
+
+  {% if forecast_history %}
 
     <div style="overflow-x:auto;">
       <table class="lb-table" id="history-table">
@@ -588,11 +596,14 @@
                      style="width:22px; height:22px; padding:1px 2px; border:1px solid #dee2e6; border-radius:4px; cursor:pointer;">
             </td>
             <td style="font-size:.8rem; white-space:nowrap;">{{ h.snapshot_date }}</td>
-            <td class="snapshot-label-cell" style="max-width:180px;"
+            <td class="snapshot-label-cell" style="max-width:200px;"
                 data-ts="{{ h.snapshot_ts or '' }}" data-date="{{ h.snapshot_date }}" data-old-label="{{ h.label or '' }}"
-                title="Double-click to rename" onclick="event.stopPropagation()">
-              <span class="label-display {% if not h.label %}label-empty{% endif %}" style="font-size:.8rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; display:block; cursor:text; min-height:1.4em;">{{ h.label or 'Add label…' }}</span>
-              <input class="label-edit form-control form-control-sm py-0" style="display:none; font-size:.78rem;" value="{{ h.label or '' }}">
+                onclick="event.stopPropagation()">
+              <div class="d-flex align-items-center gap-1">
+                <span class="label-display {% if not h.label %}label-empty{% endif %}" style="font-size:.8rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1; min-height:1.4em;">{{ h.label or 'No label' }}</span>
+                <button type="button" class="label-edit-btn btn btn-link p-0 text-muted" style="font-size:.72rem; line-height:1; flex-shrink:0;" title="Rename" onclick="startRename(this.closest('td'))">&#x270F;</button>
+              </div>
+              <input class="label-edit form-control form-control-sm py-0 mt-1" style="display:none; font-size:.78rem;" value="{{ h.label or '' }}">
             </td>
             <td><span class="pacing-pill {{ h.pacing_status }}">{{ h.pacing_status | fmt_status }}</span></td>
             <td><span class="pacing-pill {{ h.forecast_status }}">{{ h.forecast_status | fmt_status }}</span></td>
@@ -638,10 +649,10 @@
         <canvas id="compare-chart" height="240"></canvas>
       </div>
     </div>
-  </div>
-  {% endif %}
+  {% endif %}{# forecast_history #}
+  </div>{# dash-section #}
 
-  {% endif %}
+  {% endif %}{# not no_data #}
 
 </div><!-- /container -->
 {% endblock %}
@@ -1551,22 +1562,27 @@ function applyDataWindow() {
 }
 
 // Inline Snapshot Label Rename
+function startRename(cell) {
+  const display = cell.querySelector('.label-display');
+  const input   = cell.querySelector('.label-edit');
+  const btn     = cell.querySelector('.label-edit-btn');
+  if (!display || !input) return;
+  display.closest('.d-flex').style.display = 'none';
+  input.style.display = '';
+  input.focus(); input.select();
+}
+
 document.querySelectorAll('.snapshot-label-cell').forEach(cell => {
   const display = cell.querySelector('.label-display');
   const input   = cell.querySelector('.label-edit');
   if (!display || !input) return;
-
-  cell.addEventListener('dblclick', () => {
-    display.style.display = 'none';
-    input.style.display   = '';
-    input.focus(); input.select();
-  });
 
   function commitRename() {
     const newLabel = input.value.trim();
     const oldLabel = cell.dataset.oldLabel;
     const snapTs   = cell.dataset.ts;
     const snapDate = cell.dataset.date;
+    const displayRow = display.closest('.d-flex');
     if (newLabel === oldLabel) { cancelRename(); return; }
     fetch('{{ url_for("forecast.rename_forecast_snapshot") }}', {
       method: 'POST',
@@ -1574,7 +1590,7 @@ document.querySelectorAll('.snapshot-label-cell').forEach(cell => {
       body: new URLSearchParams({ snapshot_ts: snapTs, snapshot_date: snapDate, old_label: oldLabel, new_label: newLabel }),
     }).then(r => {
       if (r.status === 204) {
-        display.textContent = newLabel || 'Add label…';
+        display.textContent = newLabel || 'No label';
         display.title = newLabel;
         if (newLabel) display.classList.remove('label-empty'); else display.classList.add('label-empty');
         cell.dataset.oldLabel = newLabel;
@@ -1587,9 +1603,11 @@ document.querySelectorAll('.snapshot-label-cell').forEach(cell => {
   }
 
   function cancelRename() {
-    input.style.display = 'none'; display.style.display = '';
+    const displayRow = display.closest('.d-flex');
+    input.style.display = 'none';
+    if (displayRow) displayRow.style.display = '';
     input.value = cell.dataset.oldLabel;
-    display.textContent = cell.dataset.oldLabel || 'Add label…';
+    display.textContent = cell.dataset.oldLabel || 'No label';
     if (cell.dataset.oldLabel) display.classList.remove('label-empty'); else display.classList.add('label-empty');
   }
 

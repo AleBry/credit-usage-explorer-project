@@ -373,6 +373,15 @@
         </form>
       </div>
 
+      {# Export Data #}
+      <div class="settings-section">
+        <h5>Export Data</h5>
+        <p class="text-muted small mb-3">Download the current loaded data file.</p>
+        <a href="{{ url_for('settings.export_data') }}" class="btn btn-outline-secondary btn-sm">
+          Download current_data
+        </a>
+      </div>
+
       {# Danger Zone #}
       <div class="settings-section" style="border-color:#f5c6cb;">
         <h5 style="color:#dc3545;">Danger Zone</h5>
