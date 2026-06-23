@@ -86,90 +86,6 @@
       {{ chart_card("summaryUsageTypeChart", "Credits by Usage Type / Week", "summaryUsageTypeChart",
                     subtitle="Weekly credits split by usage type", height=260, bar_toggle=True) }}
 
-      <!-- Outlier Finder -->
-      <div class="dash-section">
-        <div class="dash-section-header">
-          <span class="dash-section-title">Outlier Finder</span>
-          {% if outlier_count > 0 %}
-          <span class="outlier-badge" style="font-size:.75rem;">{{ outlier_count }} flagged</span>
-          {% endif %}
-        </div>
-
-        <!-- Filter controls -->
-        <form method="get" action="{{ url_for('main.summary_page') }}" class="dash-section-body pb-0">
-          <div class="row g-2 align-items-end mb-3">
-            <div class="col-sm-3">
-              <label class="form-label">Min credits (last N days)</label>
-              <input class="form-control form-control-sm" type="number" name="credit_threshold"
-                     value="{{ credit_threshold }}" min="0" step="1" placeholder="100">
-            </div>
-            <div class="col-sm-3">
-              <label class="form-label">Lookback (days)</label>
-              <input class="form-control form-control-sm" type="number" name="lookback_days"
-                     value="{{ lookback_days }}" min="1" max="365" step="1" placeholder="7">
-            </div>
-            <div class="col-sm-4">
-              <label class="form-label">Model</label>
-              <select class="form-select form-select-sm" name="model_filter">
-                <option value="">All models</option>
-                {% for m in all_models_list %}
-                <option value="{{ m }}" {% if model_filter == m %}selected{% endif %}>{{ m }}</option>
-                {% endfor %}
-              </select>
-            </div>
-            <div class="col-sm-2">
-              <button class="btn btn-primary btn-sm w-100" type="submit">Apply</button>
-            </div>
-          </div>
-        </form>
-
-        {% if outlier_users %}
-        <div style="overflow-x:auto;">
-          <table class="lb-table">
-            <thead>
-              <tr>
-                <th style="width:40px">#</th>
-                <th>User</th>
-                <th>Email</th>
-                <th>Top Model</th>
-                <th class="text-end">Records</th>
-                <th class="text-end">Credits (last {{ lookback_days }}d)</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for u in outlier_users %}
-              {% set view_url = url_for('analytics.user_summary',
-                  name=u.get('name',''),
-                  email=u.get('email',''),
-                  date_field='date_partition',
-                  start_date=lookback_start_date,
-                  end_date=lookback_end_date,
-                  active_tab='records',
-                  fs='1'
-                ) %}
-              <tr class="{% if loop.index == 1 %}rank-1{% elif loop.index == 2 %}rank-2{% elif loop.index == 3 %}rank-3{% endif %}"
-                  style="cursor:pointer;" data-href="{{ view_url }}" onclick="window.location=this.dataset.href">
-                <td class="rank">{{ loop.index }}</td>
-                <td>{{ u.get('name') or u.get('email') or '&mdash;' }}</td>
-                <td style="font-size:.75rem; color:#8a92a0;">{{ u.get('email','&mdash;') }}</td>
-                <td style="font-size:.75rem; color:#555c6b;">{{ u.get('usage_type_model') or '&mdash;' }}</td>
-                <td class="text-end" style="font-size:.78rem; color:#8a92a0;">{{ '{:,}'.format(u.recent_records | int) }}</td>
-                <td class="credits text-end">{{ '{:,.0f}'.format(u.recent_credits) }}</td>
-                <td><a class="drill-link" href="{{ view_url }}" onclick="event.stopPropagation()">View &rarr;</a></td>
-              </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-        {% else %}
-        <div class="dash-section-body text-muted small">
-          No users spent more than {{ '{:,.0f}'.format(credit_threshold) }} credits
-          in the last {{ lookback_days }} day{{ 's' if lookback_days != 1 }}.
-        </div>
-        {% endif %}
-      </div>
-
     </div>
 
     <div class="col-lg-4">
@@ -292,83 +208,13 @@
 {% endblock %}
 
 {% block scripts %}
-<script>
-  // Credits by usage type per week (stacked bar)
-  window.summaryUsageTypeChart = renderUsageTypeChart('summaryUsageTypeChart', {{ usage_type_weekly | safe }});
-
-  // Weekly trend chart
-  const raw = {{ weekly_trend | safe }};
-  if (raw.length > 0) {
-    window.summaryWeeklyChart = new BNLChart('weeklyChart', {
-      type: 'bar',
-      data: {
-        labels: raw.map(d => d.week),
-        datasets: [{
-          label: 'Credits used',
-          data: raw.map(d => d.total_credits),
-          backgroundColor: 'rgba(13,110,253,0.65)',
-          borderColor: 'rgba(13,110,253,1)',
-          borderWidth: 1,
-          borderRadius: 3,
-        }]
-      },
-      options: {
-        responsive: true,
-        plugins: { legend: { display: false } },
-        scales: {
-          y: { beginAtZero: true, ticks: { callback: v => v.toLocaleString() } },
-          x: { ticks: { maxRotation: 45, font: { size: 10 } } }
-        }
-      }
-    }, { exportName: 'Weekly Credit Burn' });
-  } else {
-    document.getElementById('weeklyChart').closest('.dash-section-body').innerHTML =
-      '<p class="text-muted small mb-0">No date data available to plot.</p>';
-  }
-
-  // Active Users per Week chart
-  (function () {
-    const auData = {{ active_users_data | safe }};
-    const canvas = document.getElementById('activeUsersChart');
-    if (!canvas) return;
-    if (!auData || !auData.length) {
-      canvas.closest('.dash-section-body').innerHTML =
-        '<p class="text-muted small mb-0">No active user data available.</p>';
-      return;
+  {# Server data island — logic lives in the cacheable static/js/summary.js #}
+  <script type="application/json" id="summary-data">
+    {
+      "usageType":   {{ usage_type_weekly | safe }},
+      "weeklyTrend": {{ weekly_trend | safe }},
+      "activeUsers": {{ active_users_data | safe }}
     }
-    const labels   = auData.map(d => d.week_start);
-    const values   = auData.map(d => d.active_users);
-    const ic       = auData.map(d => d.in_contract);
-    const bgColors = ic.map(v => v ? 'rgba(111,66,193,0.7)' : 'rgba(108,117,125,0.35)');
-    window.summaryActiveUsersChart = new BNLChart('activeUsersChart', {
-      type: 'bar',
-      data: {
-        labels,
-        datasets: [{
-          label: 'Active users',
-          data: values,
-          backgroundColor: bgColors,
-          borderRadius: 3,
-        }],
-      },
-      options: {
-        responsive: true,
-        interaction: { mode: 'index', intersect: false },
-        plugins: {
-          legend: { display: false },
-          tooltip: { callbacks: {
-            title: items => 'Week of ' + items[0].label,
-            label: ctx => `  Active users: ${ctx.parsed.y}`,
-            footer: items => ic[items[0].dataIndex] ? 'In contract period' : 'Pre-contract',
-          }},
-        },
-        scales: {
-          y: { beginAtZero: true, ticks: { stepSize: 1, font: { size: 10 } }, grid: { color: 'rgba(0,0,0,.05)' } },
-          x: { ticks: { maxRotation: 45, maxTicksLimit: 16, font: { size: 10 } }, grid: { display: false } },
-        },
-      },
-    }, { exportName: 'Active Users per Week' });
-  })();
-
-</script>
+  </script>
+  <script src="{{ url_for('static', filename='js/summary.js') }}"></script>
 {% endblock %}

@@ -3,6 +3,128 @@ UPDATES LOG
 ================================================================
 
 ----------------------------------------------------------------
+2026-06-23 (outliers declutter + trigger-driven views)
+----------------------------------------------------------------
+
+- Alert Rules panel is now collapsed by default behind a "Manage rules (N)"
+  toggle (shows an "N triggering" badge). The Notifications "Set up alert
+  triggers" link opens it expanded.
+- Metric-aware outlier views: compute_outliers replaces compute_outlier_users
+  and serves three views via a "View" selector — Users over the window,
+  User-days over the limit, and Single prompts over the limit. The table
+  renders generically from a column spec returned by the service.
+- Triggers drive views: clicking a rule alert (bell / notifications page /
+  the rule's "triggering" status) opens the outliers page in the exact
+  matching view, pre-filtered to that metric + threshold + window.
+
+----------------------------------------------------------------
+2026-06-23 (custom alert rules + date-range outliers)
+----------------------------------------------------------------
+
+CONFIGURABLE ALERT RULES (mutable outliers page)
+- New "Alert Rules" section on the Outliers page: add/enable/disable/delete
+  your own triggers. Three metrics: single prompt (per record), user total
+  in one day, and user total over a window. Each shows a live triggering/
+  clear status. Stored in config/alert_rules.json (AppConfig load/save).
+- alerts.py now evaluates these rules (evaluate_rules) instead of the old
+  hardcoded "heavy users" check; matches feed the notification bell.
+
+OUTLIER FINDER: DATE-TO-DATE
+- The finder now also accepts an explicit Start/End date range (overrides
+  the rolling lookback). The window is shown in the header, the results
+  column, and the active-filter badge.
+
+NOTIFICATIONS: DAY-TO-DAY WINDOW
+- Rule-based alerts now state the exact date window they cover, e.g.
+  "4 users over 1,000 credits (2026-06-14 -> 2026-06-21)".
+
+----------------------------------------------------------------
+2026-06-23 (outlier perf + notifications page + chart fix)
+----------------------------------------------------------------
+
+OUTLIER FINDER OPTIMIZED
+- compute_outlier_users now parses the date column once (was twice) and
+  computes the per-user "top model" only for the small flagged set. Added
+  a count_only fast path used by the alerts processor (runs on every page).
+  Measured: count_only ~4.9ms vs full ~13.9ms on the live dataset; results
+  identical.
+
+NOTIFICATIONS PAGE + DROPDOWN CAP
+- New /notifications page lists all current alerts full-width (read/unread
+  + deep-links, same alerts.js state).
+- The bell dropdown now shows the first 4 alerts with a "View all
+  notifications" footer (shows the count when > 4). A hidden all-alert-ids
+  holder keeps the unread badge + read-state correct even when the dropdown
+  is capped.
+
+USER SUMMARY CHART FIX
+- The "Credits by type / week" stacked bar rendered unbounded-tall because
+  the shared renderer uses maintainAspectRatio:false; wrapped its canvas in
+  a fixed-height (190px) container so it's correctly sized/smaller.
+
+----------------------------------------------------------------
+2026-06-23 (notifications: read/unread + click-through)
+----------------------------------------------------------------
+
+- Each alert now has a stable id and optional deep-link args. Alerts carry
+  read/unread state client-side (localStorage, new static/js/alerts.js):
+  the bell badge shows the UNREAD count, read items are dimmed, and there's
+  a "Mark all read" action. Clicking an alert marks it read. Resolved
+  conditions are pruned so a recurring condition re-notifies.
+- Click-through deep-links: the "heavy users" alert opens
+  /outliers?credit_threshold=...&lookback_days=7 (pre-filtered to those
+  users); exhaustion/overburning open the Forecast page.
+- Addresses TODO "notifications read/unread" and "clicking a notification
+  opens outliers / the relevant page".
+
+----------------------------------------------------------------
+2026-06-23 (outliers page + JS/template structure)
+----------------------------------------------------------------
+
+DEDICATED OUTLIERS PAGE
+- Moved the Outlier Finder off the Summary page onto its own /outliers
+  page (new nav item). Keeps the type/model filters; the "heavy users"
+  alert now links here. Summary is leaner as a result.
+
+HTML SIZE / "MORE JS" — data-island pattern
+- Introduced the JSON data-island pattern: the template emits one
+  <script type="application/json"> with server data, and all behavior
+  lives in a cacheable static .js file (zero template interpolation).
+- Summary: ~80 lines of inline JS -> static/js/summary.js (290 -> 220).
+- Forecast: the ~1,100-line inline script -> static/js/forecast.js.
+  forecast.html went 1,838 -> 756 lines (-59%). Functions stay at global
+  scope (inline onclick still resolve); chart code guards on canvas
+  existence so it self-skips on the no-data page. Verified: island is
+  valid JSON, all D.* refs resolve, delimiters balanced, models 200.
+- chart-card / chart-toolbar styles already live in global bnl.css; the
+  reusable chart_card() Jinja macro + renderUsageTypeChart() keep new
+  charts to ~2 template lines.
+
+----------------------------------------------------------------
+2026-06-23 (charts polish + outlier finder)
+----------------------------------------------------------------
+
+- Burndown chart: disabled vertical (y) pan/zoom — it now scrolls/zooms on
+  the time axis only, so you can't drag the chart up into empty space.
+- Users page (user summary): the middle "credits per week" bar is now the
+  stacked "Credits by type / week" chart, matching Summary / Forecast /
+  Tiers (one shared renderer).
+- Outlier Finder: added a "Usage type" filter alongside Model, so you can
+  find who is burning a lot on Codex, or on a specific Pro model, in the
+  last N days. Shows an active-filter badge with a clear link.
+- Confirmed the scikit LinearRegression model is registered alongside the
+  Base (deterministic) and Monte Carlo models, with its own burndown
+  overlay toggle on the Forecast chart.
+
+IN-APP ALERTS (notifications)
+- New app/shared/alerts.py -> compute_alerts(): evaluated on every page load
+  via a context processor and rendered as a navbar bell with a severity
+  badge + dropdown list. Fully guarded so it can't break page rendering.
+- Alert types: stale data (>10 days old), heavy users this week (over a
+  threshold in the last 7 days), forecast exhaustion risk, and overburning
+  pace. Each links to the relevant page.
+
+----------------------------------------------------------------
 2026-06-23 (charts + ML)
 ----------------------------------------------------------------
 

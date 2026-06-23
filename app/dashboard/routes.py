@@ -7,13 +7,14 @@ import pandas as pd
 from flask import Blueprint, flash, redirect, render_template, request, url_for
 from werkzeug.utils import secure_filename
 
+from app.shared.alerts import evaluate_rules
 from app.shared.chart_data import usage_type_weekly_json
 from app.shared.config_service import AppConfig
 from app.shared.data_merge import merge_usage_data
 from app.shared.data_store import CreditUsageData, DataStore
 from app.shared.ingestion import IngestionPipeline
 from app.forecast.service import ChartDataBuilder, ForecastingService
-from .service import compute_outlier_users, compute_summary_metrics, compute_weekly_trend
+from .service import OUTLIER_VIEWS, compute_outliers, compute_summary_metrics, compute_weekly_trend
 
 DERIVED_COLS = {
     "usage_type_parsed_type", "usage_type_model", "usage_type_date",
@@ -42,18 +43,7 @@ def create_dashboard_blueprint(
         d = data()
         df = d.df
 
-        credit_threshold = float(request.args.get("credit_threshold", 100) or 100)
-        model_filter = request.args.get("model_filter", "").strip()
-        lookback_days = int(request.args.get("lookback_days", 7) or 7)
-
         metrics = compute_summary_metrics(df)
-        all_models_list: list[str] = (
-            sorted(df["usage_type_model"].dropna().unique().tolist())
-            if "usage_type_model" in df.columns else []
-        )
-        outlier_users, outlier_count, lookback_start_date, lookback_end_date = compute_outlier_users(
-            df, credit_threshold, lookback_days, model_filter
-        )
         weekly_trend = compute_weekly_trend(df)
 
         forecast_snapshot = None
@@ -88,14 +78,6 @@ def create_dashboard_blueprint(
         return render_template(
             "summary.html",
             metrics=metrics,
-            outlier_users=outlier_users,
-            outlier_count=outlier_count,
-            credit_threshold=credit_threshold,
-            model_filter=model_filter,
-            lookback_days=lookback_days,
-            lookback_start_date=lookback_start_date,
-            lookback_end_date=lookback_end_date,
-            all_models_list=all_models_list,
             weekly_trend=weekly_trend,
             usage_type_weekly=usage_type_weekly_json(df),
             forecast_snapshot=forecast_snapshot,
@@ -106,6 +88,105 @@ def create_dashboard_blueprint(
             },
             active_users_data=active_users_data,
         )
+
+    @bp.route("/notifications", methods=["GET"])
+    def notifications_page() -> str:
+        # nav_alerts is supplied by the app-wide context processor.
+        return render_template("notifications.html")
+
+    @bp.route("/outliers", methods=["GET"])
+    def outliers_page() -> str:
+        d = data()
+        df = d.df
+
+        metric = request.args.get("metric", "per_user_window").strip()
+        if metric not in OUTLIER_VIEWS:
+            metric = "per_user_window"
+        credit_threshold = float(request.args.get("credit_threshold", 100) or 100)
+        model_filter = request.args.get("model_filter", "").strip()
+        usage_type_filter = request.args.get("usage_type_filter", "").strip()
+        lookback_days = int(request.args.get("lookback_days", 7) or 7)
+        start_date = request.args.get("start_date", "").strip()
+        end_date = request.args.get("end_date", "").strip()
+
+        all_models_list: list[str] = (
+            sorted(df["usage_type_model"].dropna().unique().tolist())
+            if "usage_type_model" in df.columns else []
+        )
+        all_types_list: list[str] = (
+            sorted(df["usage_type_parsed_type"].dropna().unique().tolist())
+            if "usage_type_parsed_type" in df.columns else []
+        )
+        outlier_rows, outlier_count, lookback_start_date, lookback_end_date, outlier_columns = compute_outliers(
+            df, metric, credit_threshold, lookback_days,
+            start_date=start_date, end_date=end_date,
+            usage_type_filter=usage_type_filter, model_filter=model_filter,
+        )
+        use_date_range = bool(start_date or end_date)
+
+        # Custom alert rules + their current trigger status
+        alert_rules = config_svc.load_alert_rules()
+        rule_hits = {
+            a["id"].split("rule:", 1)[-1]: a["detail"]
+            for a in evaluate_rules(df, alert_rules)
+        }
+
+        return render_template(
+            "outliers.html",
+            metric=metric,
+            outlier_views=OUTLIER_VIEWS,
+            outlier_rows=outlier_rows,
+            outlier_columns=outlier_columns,
+            outlier_count=outlier_count,
+            credit_threshold=credit_threshold,
+            model_filter=model_filter,
+            usage_type_filter=usage_type_filter,
+            all_models_list=all_models_list,
+            all_types_list=all_types_list,
+            lookback_days=lookback_days,
+            start_date=start_date,
+            end_date=end_date,
+            use_date_range=use_date_range,
+            lookback_start_date=lookback_start_date,
+            lookback_end_date=lookback_end_date,
+            alert_rules=alert_rules,
+            rule_hits=rule_hits,
+        )
+
+    @bp.route("/outliers/rules/add", methods=["POST"])
+    def add_alert_rule() -> object:
+        import uuid
+        rules = config_svc.load_alert_rules()
+        try:
+            rules.append({
+                "id": uuid.uuid4().hex[:8],
+                "name": request.form.get("name", "").strip() or "Alert rule",
+                "metric": request.form.get("metric", "per_user_window"),
+                "threshold": float(request.form.get("threshold", 1000) or 1000),
+                "window_days": int(request.form.get("window_days", 7) or 7),
+                "enabled": True,
+            })
+            config_svc.save_alert_rules(rules)
+            flash("Alert rule added.", "success")
+        except (ValueError, TypeError) as exc:
+            flash(f"Could not add rule: {exc}", "danger")
+        return redirect(url_for("main.outliers_page"))
+
+    @bp.route("/outliers/rules/delete/<rule_id>", methods=["POST"])
+    def delete_alert_rule(rule_id: str) -> object:
+        rules = [r for r in config_svc.load_alert_rules() if r.get("id") != rule_id]
+        config_svc.save_alert_rules(rules)
+        flash("Alert rule removed.", "success")
+        return redirect(url_for("main.outliers_page"))
+
+    @bp.route("/outliers/rules/toggle/<rule_id>", methods=["POST"])
+    def toggle_alert_rule(rule_id: str) -> object:
+        rules = config_svc.load_alert_rules()
+        for r in rules:
+            if r.get("id") == rule_id:
+                r["enabled"] = not r.get("enabled", True)
+        config_svc.save_alert_rules(rules)
+        return redirect(url_for("main.outliers_page"))
 
     def _read_upload(file_storage) -> pd.DataFrame:
         """Read an uploaded sheet (xlsx/xls/csv) into a DataFrame from memory."""

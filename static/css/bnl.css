@@ -31,7 +31,36 @@ body { background: #f8f9fb; }
   flex-shrink: 0;
 }
 .app-brand:hover { color: #0d6efd; }
+.app-nav-bar {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 0 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: .25rem;
+}
+.app-nav-bell { flex: 0 0 auto; }
+.app-nav-bell .alerts-btn {
+  background: transparent;
+  border: 0;
+  color: #8a92a0;
+  padding: .35rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.app-nav-bell .alerts-btn:hover { color: #1a1d23; }
+.alert-item .alert-unread-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: #0d6efd; flex-shrink: 0;
+}
+.alert-item.read { opacity: .5; }
+.alert-item.read .alert-title { font-weight: 500 !important; }
+.alert-item.read .alert-unread-dot { display: none; }
+.rule-row-off { opacity: .55; }
+.lb-table td.cell-muted { font-size: .75rem; color: #8a92a0; }
 .app-nav-links {
+  flex: 1 1 auto;
+  min-width: 0;
   display: flex;
   align-items: center;
   overflow-x: auto;

@@ -62,4 +62,12 @@ def create_app() -> Flask:
     app.register_blueprint(create_settings_blueprint(pipeline, config_svc, store))
     app.jinja_env.filters["fmt_status"] = _fmt_status
 
+    @app.context_processor
+    def inject_nav_alerts() -> dict:
+        from .shared.alerts import compute_alerts
+        try:
+            return {"nav_alerts": compute_alerts(store, pipeline, config_svc)}
+        except Exception:
+            return {"nav_alerts": []}
+
     return app

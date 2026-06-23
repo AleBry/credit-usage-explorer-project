@@ -63,16 +63,18 @@
             </div>
           </div>
 
-          <!-- Middle: credits per week bar chart -->
+          <!-- Middle: credits by usage type per week (stacked) -->
           <div class="col-md-4">
             <div class="d-flex justify-content-between align-items-center mb-1">
-              <div class="hero-chart-label mb-0">Credits per week</div>
+              <div class="hero-chart-label mb-0">Credits by type / week</div>
               <div class="d-flex gap-1">
                 <button class="btn btn-outline-secondary btn-sm py-0 px-1" style="font-size:.7rem;" title="Export PNG"  onclick="window.userWeeklyBNL && window.userWeeklyBNL.exportPNG()">&#8681;</button>
                 <button class="btn btn-outline-secondary btn-sm py-0 px-1" style="font-size:.7rem;" title="Fullscreen"  onclick="window.userWeeklyBNL && window.userWeeklyBNL.openFullscreen()">&#9974;</button>
               </div>
             </div>
-            <canvas id="userWeeklyChart" height="160"></canvas>
+            <div style="position:relative; height:190px;">
+              <canvas id="userWeeklyChart"></canvas>
+            </div>
           </div>
 
           <!-- Right: credits by usage type donut -->
@@ -451,45 +453,19 @@
 
       const CHART_COLORS = ['#0d6efd','#198754','#dc3545','#ffc107','#6f42c1','#0dcaf0','#fd7e14','#20c997','#adb5bd'];
 
-      // Weekly credits bar chart
+      // Weekly credits split by usage type (stacked bar) — same component as
+      // the Summary / Forecast / Tiers pages.
       (function () {
-        const weekly = {{ user_weekly_json | safe }};
+        const data = {{ user_usage_type_weekly | safe }};
         const canvas = document.getElementById('userWeeklyChart');
         if (!canvas) return;
-
-        if (weekly.length === 0) {
+        if (!data.weeks || data.weeks.length === 0) {
           canvas.closest('.col-md-4').querySelector('.hero-chart-label').textContent = 'No date data';
           canvas.style.display = 'none';
           return;
         }
-
-        window.userWeeklyBNL = new BNLChart('userWeeklyChart', {
-          type: 'bar',
-          data: {
-            labels: weekly.map(d => d.week),
-            datasets: [{
-              data: weekly.map(d => d.credits),
-              backgroundColor: 'rgba(13,110,253,0.65)',
-              borderRadius: 3,
-              borderSkipped: false,
-            }]
-          },
-          options: {
-            responsive: true,
-            plugins: { legend: { display: false } },
-            scales: {
-              y: {
-                beginAtZero: true,
-                ticks: {
-                  callback: v => v >= 1000 ? (v / 1000).toFixed(0) + 'k' : v,
-                  font: { size: 9 }
-                },
-                grid: { color: 'rgba(0,0,0,.05)' }
-              },
-              x: { ticks: { maxRotation: 45, maxTicksLimit: 8, font: { size: 9 } }, grid: { display: false } }
-            }
-          }
-        }, { exportName: 'User Credits per Week' });
+        window.userWeeklyBNL = renderUsageTypeChart('userWeeklyChart', data,
+          { exportName: 'User Credits by Type per Week' });
       })();
 
       // Credits by usage type donut

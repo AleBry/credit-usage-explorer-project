@@ -1,5 +1,12 @@
-- scikit linear regression ML model for forecasts
-- snapshot dropdown contains MC simulations too
-- edit snapshot history menu (remove horizontal scrolling, fix columns(?))
-- optimize outlier finder
-- create bar chart by Usage type per week, put on summary and forecast page
+Priority:
+- outlier more filters
+- remove or optimize snapshot comparison graphing (smaller)
+- SETUP WIZARD:
+    If there is no data folder or config folder,
+     have a page that feeds you thru process of setting up 
+     your config and uploading your data
+      (skip if you want, manual move of config)
+
+Fine tuning:
+- generate ML snapshots too
+- Condensed GUI for forecasting

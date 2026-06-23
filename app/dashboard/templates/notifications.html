@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Notifications - Credit Usage Explorer{% endblock %}
+
+{% block body %}
+  <div class="container py-4" style="max-width: 820px;">
+
+    <div class="d-flex justify-content-between align-items-start mb-3">
+      <div>
+        <h1 class="page-title">Notifications</h1>
+        <p class="page-subtitle">Current alerts from your data and forecast.</p>
+      </div>
+      <div class="d-flex gap-2">
+        <a class="btn btn-outline-primary btn-sm" href="{{ url_for('main.outliers_page', rules='open') }}#alert-rules">
+          &#9881; Set up alert triggers
+        </a>
+        {% if nav_alerts %}
+        <button class="btn btn-outline-secondary btn-sm" onclick="markAllAlertsRead(event)">Mark all read</button>
+        {% endif %}
+      </div>
+    </div>
+
+    {% if nav_alerts %}
+    <div class="dash-section p-0" style="overflow:hidden;">
+      {% for a in nav_alerts %}
+      <a class="alert-item d-flex gap-3 align-items-start p-3 text-decoration-none"
+         style="border-bottom:1px solid #f0f2f5; color:inherit;"
+         data-alert-id="{{ a.id }}" onclick="markAlertRead('{{ a.id }}')"
+         href="{{ url_for(a.link_endpoint, **a.link_args) if a.link_endpoint else '#' }}">
+        <span class="badge bg-{{ a.level }} mt-1" style="height:.7rem; width:.7rem; padding:0; border-radius:50%; flex-shrink:0;"></span>
+        <span class="flex-grow-1">
+          <div class="alert-title fw-semibold" style="color:#1a1d23;">{{ a.title }}</div>
+          <div class="text-muted small">{{ a.detail }}</div>
+        </span>
+        <span class="alert-unread-dot mt-1" title="Unread"></span>
+      </a>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="dash-section text-center text-muted py-5">
+      <div style="font-size:2rem; line-height:1;">&#10003;</div>
+      <div class="mt-2">No notifications — everything looks healthy.</div>
+    </div>
+    {% endif %}
+
+  </div>
+{% endblock %}

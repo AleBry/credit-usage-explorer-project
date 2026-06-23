@@ -312,6 +312,7 @@ def create_analytics_blueprint(
             sort_order=sort_order,
             is_form_submission=is_form_submission,
             user_weekly_json=user_weekly_json,
+            user_usage_type_weekly=usage_type_weekly_json(df),
             type_chart_json=type_chart_json,
         )
 
