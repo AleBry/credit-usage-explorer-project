@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "macros/charts.html" import chart_card %}
 {% block title %}Summary - Credit Usage Explorer{% endblock %}
 
 {% block extra_head %}
@@ -80,6 +81,10 @@
           <canvas id="activeUsersChart" height="80"></canvas>
         </div>
       </div>
+
+      <!-- Credits by Usage Type per Week -->
+      {{ chart_card("summaryUsageTypeChart", "Credits by Usage Type / Week", "summaryUsageTypeChart",
+                    subtitle="Weekly credits split by usage type", height=260, bar_toggle=True) }}
 
       <!-- Outlier Finder -->
       <div class="dash-section">
@@ -288,6 +293,9 @@
 
 {% block scripts %}
 <script>
+  // Credits by usage type per week (stacked bar)
+  window.summaryUsageTypeChart = renderUsageTypeChart('summaryUsageTypeChart', {{ usage_type_weekly | safe }});
+
   // Weekly trend chart
   const raw = {{ weekly_trend | safe }};
   if (raw.length > 0) {

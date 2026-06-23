@@ -1,0 +1,40 @@
+{# Reusable chart card. Renders a titled card with a standard toolbar
+   (optional zoom group, export PNG, fullscreen) wired to a window-global
+   BNLChart instance named `var`.
+
+   Usage:
+     {% from "macros/charts.html" import chart_card %}
+     {{ chart_card("usageTypeChart", "Credits by Usage Type / Week",
+                   "usageTypeChart", subtitle="Stacked weekly credits", height=260) }}
+#}
+{% macro chart_card(canvas_id, title, var, subtitle="", height=260, zoom=False, bar_toggle=False, toolbar_extra="") %}
+<div class="chart-card mb-3">
+  <div class="d-flex justify-content-between align-items-start mb-1">
+    <div>
+      <div class="chart-card-title">{{ title }}</div>
+      {% if subtitle %}<div class="chart-card-sub">{{ subtitle }}</div>{% endif %}
+    </div>
+    <div class="chart-toolbar">
+      {{ toolbar_extra | safe }}
+      {% if bar_toggle %}
+      <div class="btn-group btn-group-sm" role="group" title="Bar mode">
+        <button type="button" class="btn btn-outline-secondary py-0 px-2 active" onclick="setUsageTypeMode('{{ var }}', true, this)">Stacked</button>
+        <button type="button" class="btn btn-outline-secondary py-0 px-2" onclick="setUsageTypeMode('{{ var }}', false, this)">Grouped</button>
+      </div>
+      {% endif %}
+      {% if zoom %}
+      <div class="btn-group btn-group-sm" role="group" title="Zoom">
+        <button type="button" class="btn btn-outline-secondary py-0 px-2" title="Zoom in"  onclick="window.{{ var }} && window.{{ var }}.zoom(1.25)">+</button>
+        <button type="button" class="btn btn-outline-secondary py-0 px-2" title="Zoom out" onclick="window.{{ var }} && window.{{ var }}.zoom(0.8)">&minus;</button>
+        <button type="button" class="btn btn-outline-secondary py-0 px-2" title="Reset"    onclick="window.{{ var }} && window.{{ var }}.resetZoom()">&#8635;</button>
+      </div>
+      {% endif %}
+      <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2" title="Export PNG" onclick="window.{{ var }} && window.{{ var }}.exportPNG()">&#8681;</button>
+      <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2" title="Fullscreen" onclick="window.{{ var }} && window.{{ var }}.openFullscreen()">&#9974;</button>
+    </div>
+  </div>
+  <div style="position:relative; height:{{ height }}px;">
+    <canvas id="{{ canvas_id }}" style="cursor:crosshair;"></canvas>
+  </div>
+</div>
+{% endmacro %}

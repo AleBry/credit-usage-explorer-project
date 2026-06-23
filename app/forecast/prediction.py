@@ -29,6 +29,9 @@ class ForecastContext:
     purchased_credits: float
     forecast_weekly_burn: float   # deterministic centre value
     observations: pd.Series       # weekly total_credits_used (used for volatility)
+    # Chronological in-contract weekly burns (for trend models); falls back to
+    # `observations` when not supplied.
+    weekly_series: pd.Series | None = None
 
 
 @dataclass
@@ -187,11 +190,98 @@ class MonteCarloModel(PredictionModel):
         return arr if len(arr) > 0 else np.array([1.0])
 
 
+class LinearRegressionModel(PredictionModel):
+    """scikit-learn linear regression on the weekly-burn trend.
+
+    Fits credits-burned-per-week against week index, then projects the trended
+    weekly burn forward. Unlike the flat deterministic model, this captures a
+    rising or falling burn trajectory. Confidence bands come from the regression
+    residual spread, widening with the square root of weeks projected.
+    """
+    model_id = "linear_regression"
+    label = "Linear Trend (ML)"
+    description = "scikit-learn linear regression on weekly burn, projected forward with residual bands."
+
+    _Z_80 = 1.2816  # ~P10/P90 for a normal distribution
+
+    def run(self, ctx: ForecastContext) -> PredictionResult:
+        src = ctx.weekly_series if ctx.weekly_series is not None else ctx.observations
+        y = pd.to_numeric(pd.Series(src), errors="coerce").dropna()
+        y = y[y >= 0].to_numpy(dtype=float)
+
+        full_weeks = int(math.floor(ctx.weeks_remaining))
+        partial = ctx.weeks_remaining - full_weeks
+        fracs = [1.0] * full_weeks + ([partial] if partial > 1e-6 else [])
+        n_steps = len(fracs)
+
+        if len(y) < 2 or n_steps == 0:
+            # Not enough history to fit a trend — fall back to a flat projection.
+            pts = DeterministicModel._project(
+                ctx.latest_usage_date, ctx.credits_remaining,
+                ctx.forecast_weekly_burn, ctx.weeks_remaining,
+            )
+            return PredictionResult(
+                model_id=self.model_id, label=self.label, burndown=pts,
+                metadata={"insufficient_data": True, "observations_used": int(len(y))},
+            )
+
+        from sklearn.linear_model import LinearRegression
+
+        X = np.arange(len(y)).reshape(-1, 1)
+        reg = LinearRegression().fit(X, y)
+        fitted = reg.predict(X)
+        resid_std = float(np.std(y - fitted, ddof=1)) if len(y) > 2 else 0.0
+        r2 = float(reg.score(X, y))
+        slope = float(reg.coef_[0])
+        intercept = float(reg.intercept_)
+
+        dates = [str(ctx.latest_usage_date)]
+        p50 = [ctx.credits_remaining]
+        p10 = [ctx.credits_remaining]
+        p90 = [ctx.credits_remaining]
+        remaining = ctx.credits_remaining
+        cum_var = 0.0
+        last_idx = len(y) - 1
+
+        for k, frac in enumerate(fracs, start=1):
+            week_burn = max(intercept + slope * (last_idx + k), 0.0) * frac
+            remaining = max(remaining - week_burn, 0.0)
+            cum_var += (resid_std * frac) ** 2
+            band = self._Z_80 * math.sqrt(cum_var)
+            d = ctx.latest_usage_date + timedelta(days=k * 7)
+            dates.append(str(d))
+            p50.append(round(remaining, 1))
+            p90.append(round(min(max(remaining + band, 0.0), ctx.purchased_credits), 1))
+            p10.append(round(max(remaining - band, 0.0), 1))
+            if remaining <= 0.0:
+                break
+
+        def pts(vals):
+            return [{"date": d, "value": v} for d, v in zip(dates, vals)]
+
+        exhausted = p50[-1] <= 0.0
+        return PredictionResult(
+            model_id=self.model_id,
+            label=self.label,
+            burndown=pts(p50),
+            p10=pts(p10),
+            p90=pts(p90),
+            metadata={
+                "slope_credits_per_week": round(slope, 2),
+                "intercept": round(intercept, 2),
+                "r_squared": round(r2, 4),
+                "observations_used": int(len(y)),
+                "projected_exhaustion": bool(exhausted),
+            },
+        )
+
+
 # Model Registry and Factory
 
 REGISTRY: dict[str, type[PredictionModel]] = {
     DeterministicModel.model_id: DeterministicModel,
     MonteCarloModel.model_id: MonteCarloModel,
+    LinearRegressionModel.model_id: LinearRegressionModel,
 }
 
 

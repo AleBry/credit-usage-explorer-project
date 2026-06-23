@@ -3,6 +3,57 @@ UPDATES LOG
 ================================================================
 
 ----------------------------------------------------------------
+2026-06-23 (charts + ML)
+----------------------------------------------------------------
+
+CREDITS BY USAGE TYPE / WEEK (new chart)
+- New shared builder app/shared/chart_data.py -> usage_type_weekly():
+  weekly credits split by usage type (top-N + "Other"), order-ranked.
+- Rendered as a stacked bar with a Stacked/Grouped toggle on THREE pages:
+  Summary, Forecast, and Tiers (on Tiers it respects the page filters).
+
+REUSABLE CHART INFRASTRUCTURE (less repetition, more structure)
+- New Jinja macro app/templates/macros/charts.html -> chart_card(): one
+  place for the card + toolbar (export PNG, fullscreen, optional zoom,
+  optional bar-mode toggle). Used by all the new charts.
+- chart-card / chart-toolbar styles moved into global bnl.css (removed the
+  duplicated block from forecast.html).
+- charts.js gained renderUsageTypeChart() + setUsageTypeStacked/Mode() so
+  any page renders the chart with one call. Charts remain readable via the
+  existing fullscreen modal + PNG export.
+
+SCIKIT-LEARN LINEAR REGRESSION FORECAST MODEL
+- Added scikit-learn to requirements; new LinearRegressionModel in
+  app/forecast/prediction.py (registered alongside Deterministic + Monte
+  Carlo). Fits weekly burn vs. week index, projects the trend forward, and
+  derives P10/P90 bands from residual spread.
+- ForecastContext gained an optional chronological weekly_series; the
+  model-data endpoint now supplies it.
+- New "Linear Trend (ML)" overlay toggle on the burndown chart (shows slope
+  + R2), with state restored on reload and refreshed on granularity change.
+
+----------------------------------------------------------------
+2026-06-23
+----------------------------------------------------------------
+
+SNAPSHOT HISTORY TABLE (no more horizontal scroll)
+- Rebuilt the snapshot table with a fixed 8-column layout that always
+  fits the page width (no horizontal scrollbar). Columns consolidated:
+  select+color swatch, Snapshot (date + editable label stacked), Status
+  (pacing + forecast pills stacked), Weekly Burn, Remaining, End Balance
+  (with exhaustion date as a sub-note), MC Risk, and actions.
+- Added a scoped .snap-table style for a cleaner, more compact look.
+
+MONTE CARLO IN SNAPSHOT OVERLAYS
+- Added a "Monte Carlo bands" toggle in the quick-select bar beneath the
+  burndown chart. When on, each selected snapshot's P10-P90 confidence
+  bands are overlaid (for snapshots that carry MC data).
+- "Generate weekly" is now a dropdown with two choices: Fast (no Monte
+  Carlo) and Include Monte Carlo (slower). MC mode regenerates existing
+  weekly snapshots so they gain bands, using a capped run count (<=2000)
+  to stay responsive across many weeks.
+
+----------------------------------------------------------------
 2026-06-22 (later)
 ----------------------------------------------------------------
 

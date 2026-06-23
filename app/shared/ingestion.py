@@ -534,3 +534,27 @@ class IngestionPipeline:
 
     def has_forecast_history(self) -> bool:
         return (self.processed_dir / self.FORECAST_HISTORY).exists()
+
+    def delete_all_snapshots(self) -> int:
+        """Remove every saved snapshot (history CSV + per-snapshot JSON files).
+
+        Returns the number of snapshots that were in the history before deletion.
+        """
+        count = len(self.get_forecast_history())
+
+        history_path = self.processed_dir / self.FORECAST_HISTORY
+        if history_path.exists():
+            try:
+                history_path.unlink()
+            except Exception:
+                pass
+
+        snaps_dir = self.processed_dir / self.SNAPSHOTS_DIR
+        if snaps_dir.exists():
+            for f in snaps_dir.glob("*.json"):
+                try:
+                    f.unlink()
+                except Exception:
+                    pass
+
+        return count

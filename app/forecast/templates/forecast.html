@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "macros/charts.html" import chart_card %}
 {% block title %}Forecast - Credit Usage Explorer{% endblock %}
 
 {% block extra_head %}
@@ -50,28 +51,41 @@
         margin-bottom: .6rem;
       }
 
-      .chart-card {
-        background: #fff;
-        border: 1px solid #e3e6ea;
-        border-radius: 10px;
-        padding: 1rem 1.1rem;
+      /* chart-card / chart-toolbar styles are now global (bnl.css) */
+
+      /* Compact, fixed-layout snapshot table — never scrolls horizontally */
+      .snap-table { width: 100%; table-layout: fixed; border-collapse: collapse; }
+      .snap-table thead th {
+        font-size: .64rem; font-weight: 700; text-transform: uppercase;
+        letter-spacing: .04em; color: #8a92a0; text-align: left;
+        padding: .4rem .5rem; border-bottom: 1px solid #e3e6ea; white-space: nowrap;
       }
-      .chart-card-title {
-        font-size: .85rem;
-        font-weight: 700;
-        color: #1a1d23;
-        margin-bottom: .1rem;
+      .snap-table thead th.text-end { text-align: right; }
+      .snap-table tbody tr { border-bottom: 1px solid #f0f2f5; }
+      .snap-table tbody tr:hover { background: #f8f9fb; }
+      .snap-table tbody td { padding: .5rem .5rem; vertical-align: middle; color: #2c3140; }
+      .snap-table td.num { font-size: .8rem; font-variant-numeric: tabular-nums; }
+      .snap-table td.cell-select { text-align: center; white-space: nowrap; }
+      .snap-table td.cell-select .history-cb { display: block; margin: 0 auto .25rem; cursor: pointer; }
+      .snap-table td.cell-select .snap-color-input {
+        width: 18px; height: 18px; padding: 0; border: 1px solid #dee2e6;
+        border-radius: 3px; cursor: pointer; display: block; margin: 0 auto;
       }
-      .chart-card-sub {
-        font-size: .66rem;
-        color: #adb5bd;
-        margin-bottom: .6rem;
+      .snap-table .snap-date { font-size: .8rem; font-weight: 600; color: #1a1d23; line-height: 1.2; }
+      .snap-table .snapshot-label-cell { overflow: hidden; }
+      .snap-table .label-display {
+        font-size: .74rem; color: #6c757d; flex: 1; min-width: 0;
+        overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: text;
       }
-      .chart-toolbar {
-        display: flex;
-        gap: .3rem;
-        align-items: center;
-      }
+      .snap-table .label-edit-btn { font-size: .68rem; line-height: 1; flex-shrink: 0; }
+      .snap-table .pacing-pill { font-size: .63rem; padding: .08rem .4rem; }
+      .snap-table .sub-note { font-size: .64rem; color: #adb5bd; line-height: 1.1; }
+      .snap-table td.cell-actions { white-space: nowrap; }
+      .snap-table td.cell-actions a, .snap-table td.cell-actions button { font-size: .82rem; }
+
+      /* Snapshot header toolbar — one place for button sizing, no repeated inline styles */
+      .snap-toolbar form { margin: 0; display: inline-block; }
+      .snap-toolbar .btn { font-size: .72rem; padding: .1rem .5rem; }
     </style>
 {% endblock %}
 
@@ -307,6 +321,11 @@
         <span style="color:#fd7e14;">&#9646; Monte Carlo</span>
         <span class="text-muted ms-1" style="font-size:.7rem;">({{ "{:,}".format(saved_contract.get('forecast', {}).get('monte_carlo_runs', 10000) | int) }} runs)</span>
       </label>
+      <label class="d-flex align-items-center gap-1 mb-0" style="cursor:pointer; user-select:none;">
+        <input type="checkbox" id="model-lr" onchange="toggleForecastModel('linear_regression', this.checked)">
+        <span style="color:#198754;">&#9472; Linear Trend (ML)</span>
+        <span id="lr-status" class="text-muted ms-1" style="font-size:.7rem;"></span>
+      </label>
       <span id="mc-band-controls" class="d-flex align-items-center gap-2" style="display:none;">
         <label class="d-flex align-items-center gap-1 mb-0" style="cursor:pointer; user-select:none;">
           <input type="checkbox" id="mc-show-p90" checked onchange="toggleMcBand('p90', this.checked)">
@@ -371,6 +390,11 @@
           {% endfor %}
         </ul>
       </div>
+      <label class="d-flex align-items-center gap-1 mb-0 ms-1" style="cursor:pointer; font-size:.74rem; color:#6c757d;"
+             title="Overlay each selected snapshot's Monte Carlo confidence bands (P10–P90)">
+        <input type="checkbox" class="form-check-input mt-0" id="snap-mc-toggle" onchange="toggleSnapMc(this.checked)">
+        Monte Carlo bands
+      </label>
       <span id="quick-select-pills" class="d-flex gap-1 flex-wrap align-items-center"></span>
     </div>
     {% endif %}
@@ -418,6 +442,10 @@
       </div>
     </div>
   </div>
+
+  <!-- Credits by Usage Type per Week -->
+  {{ chart_card("forecastUsageTypeChart", "Credits by Usage Type / Week", "forecastUsageTypeChart",
+                subtitle="Weekly credits split by usage type", height=260, bar_toggle=True) }}
 
   <!-- Details Accordion -->
   <div class="section-label">Details</div>
@@ -581,15 +609,25 @@
         {{ forecast_history | length }} snapshot{{ 's' if forecast_history | length != 1 }} &middot; overlay them with the selector above the chart
       </span>
       {% endif %}
-      <span class="ms-auto d-flex gap-2 align-items-center">
-        <form method="post" action="{{ url_for('forecast.generate_weekly_snapshots') }}" style="display:inline;" onsubmit="return confirm('Generate a snapshot for each operational week? This may take a moment.');">
-          <button class="btn btn-outline-primary btn-sm py-0 px-2" style="font-size:.72rem;" type="submit" title="Create one snapshot per operational week">&#x1F4C5; Generate weekly</button>
+      <span class="ms-auto d-flex gap-2 align-items-center snap-toolbar">
+        {# Two submit buttons, one form: the clicked button's include_mc value is sent. #}
+        <form method="post" action="{{ url_for('forecast.generate_weekly_snapshots') }}">
+          <div class="btn-group btn-group-sm" role="group" aria-label="Generate weekly snapshots">
+            <button class="btn btn-outline-primary" type="submit" name="include_mc" value="0"
+                    onclick="return confirm('Generate one snapshot per operational week?');"
+                    title="One snapshot per operational week (fast)">&#x1F4C5; Generate weekly</button>
+            <button class="btn btn-outline-primary" type="submit" name="include_mc" value="1"
+                    onclick="return confirm('Generate weekly snapshots with Monte Carlo bands? This is slower.');"
+                    title="Same, but compute Monte Carlo confidence bands (slower)">+ Monte Carlo</button>
+          </div>
         </form>
         {% if forecast_history %}
-        <button class="btn btn-outline-secondary btn-sm py-0 px-2" style="font-size:.72rem;" type="button"
-                data-bs-toggle="collapse" data-bs-target="#snap-manage" aria-expanded="false">
-          Manage &amp; details
-        </button>
+        <button class="btn btn-outline-secondary btn-sm" type="button"
+                data-bs-toggle="collapse" data-bs-target="#snap-manage" aria-expanded="false">Manage &amp; details</button>
+        <form method="post" action="{{ url_for('forecast.delete_all_forecast_snapshots') }}"
+              onsubmit="return confirm('Delete ALL {{ forecast_history | length }} snapshots? This cannot be undone.');">
+          <button class="btn btn-outline-danger btn-sm" type="submit" title="Delete every saved snapshot">&#x1F5D1; Delete all</button>
+        </form>
         {% endif %}
       </span>
     </div>
@@ -609,82 +647,72 @@
       </div>
     </div>
 
-    <!-- Full table tucked into a collapsible panel to avoid clutter / horizontal scroll -->
+    <!-- Full table tucked into a collapsible panel; fixed layout = no horizontal scroll -->
     <div class="collapse" id="snap-manage">
-    <div style="overflow-x:auto;">
-      <table class="lb-table" id="history-table">
+      <table class="snap-table" id="history-table">
         <thead>
           <tr>
-            <th style="width:32px;"></th>
-            <th style="width:28px;" title="Snapshot color"></th>
-            <th>Date</th>
-            <th>Label</th>
-            <th>Pacing</th>
-            <th>Forecast</th>
+            <th style="width:34px;"></th>
+            <th style="width:23%;">Snapshot</th>
+            <th style="width:118px;">Status</th>
             <th class="text-end">Weekly Burn</th>
-            <th class="text-end">Credits Remaining</th>
-            <th class="text-end">End Balance</th>
-            <th>Exhaustion</th>
-            <th class="text-end">MC Risk</th>
-            <th style="width:60px;"></th>
+            <th class="text-end">Remaining</th>
+            <th class="text-end">End Bal.</th>
+            <th class="text-end" style="width:72px;">MC Risk</th>
+            <th style="width:56px;"></th>
           </tr>
         </thead>
         <tbody>
           {% for h in forecast_history %}
           <tr class="history-row" data-snap='{{ h | tojson }}' onclick="toggleRow(this)" style="cursor:pointer;">
-            <td><input type="checkbox" class="form-check-input history-cb" onclick="event.stopPropagation();toggleRow(this.closest('tr'))"></td>
-            <td onclick="event.stopPropagation()">
+            <td class="cell-select" onclick="event.stopPropagation()">
+              <input type="checkbox" class="form-check-input history-cb" onclick="event.stopPropagation();toggleRow(this.closest('tr'))">
               <input type="color" class="snap-color-input"
                      value="{{ h.color or '#adb5bd' }}"
-                     data-ts="{{ h.snapshot_ts or '' }}"
-                     data-date="{{ h.snapshot_date }}"
-                     data-label="{{ h.label or '' }}"
-                     onchange="setSnapColor(this)"
-                     title="Set snapshot color"
-                     style="width:22px; height:22px; padding:1px 2px; border:1px solid #dee2e6; border-radius:4px; cursor:pointer;">
+                     data-ts="{{ h.snapshot_ts or '' }}" data-date="{{ h.snapshot_date }}" data-label="{{ h.label or '' }}"
+                     onchange="setSnapColor(this)" title="Snapshot color">
             </td>
-            <td style="font-size:.8rem; white-space:nowrap;">{{ h.snapshot_date }}</td>
-            <td class="snapshot-label-cell" style="max-width:200px;"
+            <td class="snapshot-label-cell"
                 data-ts="{{ h.snapshot_ts or '' }}" data-date="{{ h.snapshot_date }}" data-old-label="{{ h.label or '' }}"
                 onclick="event.stopPropagation()">
+              <div class="snap-date">{{ h.snapshot_date }}</div>
               <div class="d-flex align-items-center gap-1">
-                <span class="label-display {% if not h.label %}label-empty{% endif %}" style="font-size:.8rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1; min-height:1.4em;">{{ h.label or 'No label' }}</span>
-                <button type="button" class="label-edit-btn btn btn-link p-0 text-muted" style="font-size:.72rem; line-height:1; flex-shrink:0;" title="Rename" onclick="startRename(this.closest('td'))">&#x270F;</button>
+                <span class="label-display {% if not h.label %}label-empty{% endif %}">{{ h.label or 'No label' }}</span>
+                <button type="button" class="label-edit-btn btn btn-link p-0 text-muted" title="Rename" onclick="startRename(this.closest('td'))">&#x270F;</button>
               </div>
-              <input class="label-edit form-control form-control-sm py-0 mt-1" style="display:none; font-size:.78rem;" value="{{ h.label or '' }}">
+              <input class="label-edit form-control form-control-sm py-0 mt-1" style="display:none; font-size:.76rem;" value="{{ h.label or '' }}">
             </td>
-            <td><span class="pacing-pill {{ h.pacing_status }}">{{ h.pacing_status | fmt_status }}</span></td>
-            <td><span class="pacing-pill {{ h.forecast_status }}">{{ h.forecast_status | fmt_status }}</span></td>
-            <td class="text-end">{{ '{:,.0f}'.format(h.forecast_weekly_burn | float) if h.forecast_weekly_burn else '—' }}</td>
-            <td class="text-end">{{ '{:,.0f}'.format(h.credits_remaining | float) if h.credits_remaining else '—' }}</td>
-            <td class="text-end {{ 'text-danger' if h.forecast_contract_end_balance and h.forecast_contract_end_balance | float < 0 else 'text-success' }}">
-              {{ '{:,.0f}'.format(h.forecast_contract_end_balance | float) if h.forecast_contract_end_balance else '—' }}
+            <td>
+              <span class="pacing-pill {{ h.pacing_status }}">{{ h.pacing_status | fmt_status }}</span>
+              <span class="pacing-pill {{ h.forecast_status }} mt-1 d-inline-block">{{ h.forecast_status | fmt_status }}</span>
             </td>
-            <td style="font-size:.8rem;">{{ h.forecast_exhaustion_date or '—' }}</td>
-            <td class="text-end" style="font-size:.8rem;">
+            <td class="text-end num">{{ '{:,.0f}'.format(h.forecast_weekly_burn | float) if h.forecast_weekly_burn else '—' }}</td>
+            <td class="text-end num">{{ '{:,.0f}'.format(h.credits_remaining | float) if h.credits_remaining else '—' }}</td>
+            <td class="text-end num">
+              <span class="{{ 'text-danger' if h.forecast_contract_end_balance and h.forecast_contract_end_balance | float < 0 else 'text-success' }}">
+                {{ '{:,.0f}'.format(h.forecast_contract_end_balance | float) if h.forecast_contract_end_balance else '—' }}
+              </span>
+              {% if h.forecast_exhaustion_date %}<div class="sub-note">exh {{ h.forecast_exhaustion_date }}</div>{% endif %}
+            </td>
+            <td class="text-end num">
               {%- if h.mc_exhaustion_prob -%}
                 <span class="{{ 'text-danger' if h.mc_exhaustion_prob | float > 0.5 else ('text-warning' if h.mc_exhaustion_prob | float > 0.1 else 'text-success') }}">
                   {{ '{:.0%}'.format(h.mc_exhaustion_prob | float) }}
                 </span>
-              {%- else -%}—{%- endif -%}
+              {%- else -%}<span class="text-muted">—</span>{%- endif -%}
             </td>
-            <td onclick="event.stopPropagation()" class="text-nowrap">
-              <a class="btn btn-link btn-sm p-0 text-primary me-1"
+            <td class="cell-actions text-end" onclick="event.stopPropagation()">
+              <a class="btn btn-link btn-sm p-0 text-primary"
                  onclick="viewSnapForecast(this.closest('tr'), event)"
-                 title="View forecast at this snapshot"
-                 style="cursor:pointer; font-size:.78rem;">&#x1F441;</a>
+                 title="View forecast at this snapshot" style="cursor:pointer;">&#x1F441;</a>
               <button type="button" class="btn btn-link btn-sm p-0 text-danger"
-                      data-ts="{{ h.snapshot_ts or '' }}"
-                      data-date="{{ h.snapshot_date }}"
-                      data-label="{{ h.label or '' }}"
-                      onclick="deleteSnapshot(this, event)"
-                      title="Delete snapshot">&#x1F5D1;</button>
+                      data-ts="{{ h.snapshot_ts or '' }}" data-date="{{ h.snapshot_date }}" data-label="{{ h.label or '' }}"
+                      onclick="deleteSnapshot(this, event)" title="Delete snapshot">&#x1F5D1;</button>
             </td>
           </tr>
           {% endfor %}
         </tbody>
       </table>
-    </div>
     </div>{# /collapse #snap-manage #}
   {% else %}
     <p class="text-muted small mb-0">
@@ -776,9 +804,9 @@
           spanGaps: false, _snapOverlay: true,
         });
 
-        // MC bands from snapshot — if available
+        // MC bands from snapshot — only when the snapshot-MC toggle is on
         const mc = series && series.mc;
-        if (mc && mc.p50 && mc.p50.length) {
+        if (window.showSnapMc && mc && mc.p50 && mc.p50.length) {
           const p10d = interpSeriesData(mc.p10 || [], allLabels, 'date', 'value');
           const p50d = interpSeriesData(mc.p50,       allLabels, 'date', 'value');
           const p90d = interpSeriesData(mc.p90 || [], allLabels, 'date', 'value');
@@ -995,6 +1023,16 @@
 
   function quickSelectAll() { selectAllSnaps(); }
   function quickSelectNone() { clearComparison(); }
+
+  // Toggle Monte Carlo confidence bands for the selected snapshot overlays.
+  window.showSnapMc = false;
+  function toggleSnapMc(on) {
+    window.showSnapMc = !!on;
+    // Ensure series (which carries MC data) is loaded for each selected snapshot,
+    // then redraw overlays.
+    [...selectedSnaps.values()].forEach(h => fetchSnapSeries(h));
+    updateBurndownOverlays();
+  }
 
   function syncQuickSelect() {
     // Reflect current selection into the dropdown checkboxes, button label, and pills.
@@ -1248,6 +1286,7 @@
       // Refresh overlays with new label set
       if (typeof updateBurndownOverlays === 'function') updateBurndownOverlays();
       if (typeof window.refreshMcBands    === 'function') window.refreshMcBands();
+      if (typeof window.refreshLrOverlay  === 'function') window.refreshLrOverlay();
 
       // Update toggle button states
       document.getElementById('gran-weekly').classList.toggle('active', gran === 'weekly');
@@ -1267,6 +1306,7 @@
     let mcCache  = null;
     let mcLoading = null;
     let detDataset = null;
+    let lrCache = null, lrLoading = null;
 
     window.toggleForecastModel = function (modelId, enabled) {
       localStorage.setItem('forecast-model-' + modelId, enabled ? '1' : '0');
@@ -1281,8 +1321,98 @@
         bc.update();
       } else if (modelId === 'monte_carlo') {
         if (enabled) loadMcOverlay(); else removeMcOverlay();
+      } else if (modelId === 'linear_regression') {
+        if (enabled) loadLrOverlay(); else removeLrOverlay();
       }
     };
+
+    // ── Linear Trend (ML) overlay ──
+    function getLrData() {
+      if (lrCache) return Promise.resolve(lrCache);
+      if (!lrLoading) {
+        const params = new URLSearchParams(window.location.search);
+        params.set('model', 'linear_regression');
+        lrLoading = fetch('/forecast/model-data?' + params.toString())
+          .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+          .then(data => { lrCache = data; lrLoading = null; return data; })
+          .catch(e => { lrLoading = null; throw e; });
+      }
+      return lrLoading;
+    }
+
+    function interpPts(pts, allLabels) {
+      if (!pts || !pts.length) return allLabels.map(() => null);
+      const start = pts[0].date, end = pts[pts.length - 1].date;
+      return allLabels.map(l => {
+        if (l < start || l > end) return null;
+        const idx = pts.findIndex(p => p.date > l);
+        if (idx === -1) return pts[pts.length - 1].value;
+        if (idx === 0)  return pts[0].value;
+        const a = pts[idx - 1], b = pts[idx];
+        const t = (new Date(l) - new Date(a.date)) / (new Date(b.date) - new Date(a.date));
+        return a.value + t * (b.value - a.value);
+      });
+    }
+
+    function applyLrToChart(data) {
+      const bc = window.burndownChart;
+      if (!bc) return;
+      bc.data.datasets = bc.data.datasets.filter(d => !d._lrOverlay);
+      const allLabels = bc.data.labels;
+      const C = '#198754';
+      const p50 = interpPts(data.burndown, allLabels);
+      const hasBand = data.p10 && data.p90 && data.p10.length && data.p90.length;
+      if (hasBand) {
+        bc.data.datasets.push({
+          label: 'LR P90', data: interpPts(data.p90, allLabels),
+          borderColor: hexToRgba(C, 0.4), borderWidth: 1, borderDash: [2, 3],
+          backgroundColor: hexToRgba(C, 0.10), fill: '+1', tension: 0.1, pointRadius: 0,
+          spanGaps: false, _lrOverlay: true,
+        });
+        bc.data.datasets.push({
+          label: 'LR P10', data: interpPts(data.p10, allLabels),
+          borderColor: hexToRgba(C, 0.4), borderWidth: 1, borderDash: [2, 3],
+          backgroundColor: 'transparent', fill: false, tension: 0.1, pointRadius: 0,
+          spanGaps: false, _lrOverlay: true,
+        });
+      }
+      bc.data.datasets.push({
+        label: 'Linear Trend (ML)', data: p50,
+        borderColor: C, borderWidth: 2, borderDash: [6, 3],
+        backgroundColor: 'transparent', fill: false, tension: 0.1,
+        pointRadius: 0, pointHoverRadius: 4, spanGaps: false, _lrOverlay: true,
+      });
+      bc.update();
+    }
+
+    async function loadLrOverlay() {
+      const status = document.getElementById('lr-status');
+      if (status && !lrCache) status.textContent = 'loading…';
+      try {
+        const data = await getLrData();
+        applyLrToChart(data);
+        if (status) {
+          const m = data.metadata || {};
+          status.textContent = (m.slope_credits_per_week != null)
+            ? `slope ${Math.round(m.slope_credits_per_week).toLocaleString()}/wk · R² ${m.r_squared}`
+            : '';
+        }
+      } catch (e) {
+        if (status) status.textContent = 'load failed';
+        const cb = document.getElementById('model-lr');
+        if (cb) cb.checked = false;
+      }
+    }
+
+    function removeLrOverlay() {
+      const bc = window.burndownChart;
+      if (!bc) return;
+      bc.data.datasets = bc.data.datasets.filter(d => !d._lrOverlay);
+      bc.update();
+      const status = document.getElementById('lr-status');
+      if (status) status.textContent = '';
+    }
+    window.refreshLrOverlay = function () { if (lrCache) applyLrToChart(lrCache); };
 
     function getMcData() {
       if (mcCache) return Promise.resolve(mcCache);
@@ -1495,6 +1625,10 @@
       const cb = document.getElementById('model-mc');
       if (cb) { cb.checked = true; window.toggleForecastModel('monte_carlo', true); }
     }
+    if (localStorage.getItem('forecast-model-linear_regression') === '1') {
+      const cb = document.getElementById('model-lr');
+      if (cb) { cb.checked = true; window.toggleForecastModel('linear_regression', true); }
+    }
 
     // Auto-load MC stats on page load (also serves chart overlay if it was restored)
     getMcData().then(updateMcStats).catch(() => {
@@ -1578,6 +1712,9 @@
       },
     }, { exportName: 'Active Users per Week' });
   })();
+
+  // Credits by Usage Type per Week (stacked bar)
+  window.forecastUsageTypeChart = renderUsageTypeChart('forecastUsageTypeChart', {{ usage_type_weekly | safe }});
 
   // Cumulative Burn Chart
   (function () {

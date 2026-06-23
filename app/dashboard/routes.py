@@ -7,6 +7,7 @@ import pandas as pd
 from flask import Blueprint, flash, redirect, render_template, request, url_for
 from werkzeug.utils import secure_filename
 
+from app.shared.chart_data import usage_type_weekly_json
 from app.shared.config_service import AppConfig
 from app.shared.data_merge import merge_usage_data
 from app.shared.data_store import CreditUsageData, DataStore
@@ -96,6 +97,7 @@ def create_dashboard_blueprint(
             lookback_end_date=lookback_end_date,
             all_models_list=all_models_list,
             weekly_trend=weekly_trend,
+            usage_type_weekly=usage_type_weekly_json(df),
             forecast_snapshot=forecast_snapshot,
             pipeline_status=ps,
             data_source={

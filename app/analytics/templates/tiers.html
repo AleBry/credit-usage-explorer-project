@@ -1,5 +1,11 @@
 {% extends "base.html" %}
+{% from "macros/charts.html" import chart_card %}
 {% block title %}Tiers - Credit Usage Explorer{% endblock %}
+
+{% block extra_head %}
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="{{ url_for('static', filename='js/charts.js') }}"></script>
+{% endblock %}
 
 {% block body %}
     <div class="container py-4" style="max-width: 1280px;">
@@ -63,6 +69,10 @@
           </div>
         </div>
       </form>
+
+      <!-- Credits by Usage Type per Week (reflects the filters above) -->
+      {{ chart_card("tiersUsageTypeChart", "Credits by Usage Type / Week", "tiersUsageTypeChart",
+                    subtitle="Reflects the filters above", height=240, bar_toggle=True) }}
 
       <!-- TABS -->
       <div class="tier-tabs">
@@ -509,5 +519,6 @@
       document.querySelectorAll('#filter-form select, #filter-form input[type="date"]').forEach(el => {
         el.addEventListener('change', () => document.getElementById('filter-form').submit());
       });
+      window.tiersUsageTypeChart = renderUsageTypeChart('tiersUsageTypeChart', {{ usage_type_weekly | safe }});
     </script>
 {% endblock %}

@@ -658,3 +658,14 @@ th[data-col]:hover .sort-indicator { opacity: .55; }
   vertical-align: middle;
 }
 .settings-table tbody tr:last-child td { border-bottom: none; }
+
+/* ── Chart cards (shared across Summary, Forecast, Tiers …) ── */
+.chart-card {
+  background: #fff;
+  border: 1px solid #e3e6ea;
+  border-radius: 10px;
+  padding: 1rem 1.1rem;
+}
+.chart-card-title { font-size: .85rem; font-weight: 700; color: #1a1d23; margin-bottom: .1rem; }
+.chart-card-sub { font-size: .66rem; color: #adb5bd; margin-bottom: .6rem; }
+.chart-toolbar { display: flex; gap: .3rem; align-items: center; flex-wrap: wrap; justify-content: flex-end; }

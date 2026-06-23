@@ -1,5 +1,7 @@
 flask>=3.0
 pandas>=2.2
+numpy>=1.26
 pyyaml>=6.0
 openpyxl>=3.1       # pandas engine for .xlsx
 xlrd>=2.0           # pandas engine for .xls (legacy)
+scikit-learn>=1.4   # linear-regression forecast model

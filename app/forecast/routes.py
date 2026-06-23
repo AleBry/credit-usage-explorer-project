@@ -6,6 +6,7 @@ import datetime as _dt
 import pandas as _pd
 from flask import Blueprint, flash, jsonify, redirect, render_template, request, url_for
 
+from app.shared.chart_data import usage_type_weekly_json
 from app.shared.config_service import AppConfig
 from app.shared.data_store import DataStore
 from app.shared.ingestion import IngestionPipeline
@@ -81,6 +82,8 @@ def create_forecast_blueprint(
             if not win.empty:
                 forecasting._forecast_op_df = win
 
+        usage_type_weekly = usage_type_weekly_json(_get_store_df())
+
         if not forecasting.has_data():
             return render_template(
                 template_name,
@@ -91,6 +94,7 @@ def create_forecast_blueprint(
                 weekly_chart_data="[]",
                 cumulative_chart_data="[]",
                 active_users_data="[]",
+                usage_type_weekly=usage_type_weekly,
                 pipeline_status=pipeline.status(),
                 forecast_history=[],
                 is_preview=False,
@@ -122,6 +126,7 @@ def create_forecast_blueprint(
             weekly_chart_data=weekly_chart_data,
             cumulative_chart_data=cumulative_chart_data,
             active_users_data=active_users_data,
+            usage_type_weekly=usage_type_weekly,
             pipeline_status=pipeline.status(),
             forecast_history=pipeline.get_forecast_history(),
             is_preview=is_preview,
@@ -203,6 +208,15 @@ def create_forecast_blueprint(
         if not ok:
             return (err or "Delete failed.", 500)
         return ("", 204)
+
+    @bp.route("/forecast/history/delete-all", methods=["POST"])
+    def delete_all_forecast_snapshots() -> object:
+        count = pipeline.delete_all_snapshots()
+        if count:
+            flash(f"Deleted all {count} snapshot{'s' if count != 1 else ''}.", "success")
+        else:
+            flash("No snapshots to delete.", "info")
+        return redirect(url_for("forecast.forecast_page"))
 
     @bp.route("/forecast/snapshot", methods=["POST"])
     def save_forecast_snapshot() -> object:
@@ -291,6 +305,13 @@ def create_forecast_blueprint(
             flash("No data available. Upload a data sheet on the Summary page first.", "warning")
             return redirect(url_for("forecast.forecast_page"))
 
+        # Monte Carlo is optional for weekly batches (it's the slow part). When
+        # requested, cap the run count so generating many weeks stays responsive.
+        include_mc = request.form.get("include_mc") == "1"
+        if include_mc:
+            cfg_fc = config.setdefault("forecast", {})
+            cfg_fc["monte_carlo_runs"] = min(int(cfg_fc.get("monte_carlo_runs", 10000)), 2000)
+
         existing_labels = {h.get("label", "") for h in pipeline.get_forecast_history()}
         op_sorted = op_df.sort_values("week_start").reset_index(drop=True)
         generated = skipped = errors = 0
@@ -299,10 +320,18 @@ def create_forecast_blueprint(
             row = op_sorted.iloc[i]
             week_end_str = str(_pd.Timestamp(row["week_end"]).date())
             label = f"Week of {week_end_str}"
+            snap_ts = f"{week_end_str}T00:00:00"
 
             if label in existing_labels:
-                skipped += 1
-                continue
+                if not include_mc:
+                    skipped += 1
+                    continue
+                # Regenerate this week so it gains Monte Carlo bands; drop the old
+                # (MC-less) snapshot first to avoid a duplicate history row.
+                try:
+                    pipeline.delete_snapshot(snap_ts, week_end_str, label)
+                except Exception:
+                    pass
 
             # Build a service that only sees data through this week
             truncated_op = op_sorted.iloc[: i + 1].copy()
@@ -315,9 +344,9 @@ def create_forecast_blueprint(
                     pipeline.processed_dir,
                     once_per_day=False,
                     label=label,
-                    snapshot_ts=f"{week_end_str}T00:00:00",
+                    snapshot_ts=snap_ts,
                     snapshot_date=week_end_str,
-                    skip_mc=True,
+                    skip_mc=not include_mc,
                 )
                 existing_labels.add(label)
                 generated += 1
@@ -385,6 +414,15 @@ def create_forecast_blueprint(
                 obs_parts.append(df["total_credits_used"])
         observations = _pd.concat(obs_parts) if obs_parts else _pd.Series(dtype="float64")
 
+        # Chronological in-contract weekly burns for trend models (LinearRegression).
+        if _obs_op is not None and not _obs_op.empty and "total_credits_used" in _obs_op.columns:
+            weekly_series = (
+                _obs_op.sort_values("week_start")["total_credits_used"]
+                if "week_start" in _obs_op.columns else _obs_op["total_credits_used"]
+            )
+        else:
+            weekly_series = None
+
         raw_date = cs.get("latest_usage_date")
         try:
             if isinstance(raw_date, _dt.date):
@@ -401,6 +439,7 @@ def create_forecast_blueprint(
             purchased_credits=float(cs["purchased_credits"]),
             forecast_weekly_burn=float(fc["forecast_weekly_burn"]),
             observations=observations,
+            weekly_series=weekly_series,
         )
 
         try:

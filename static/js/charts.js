@@ -29,6 +29,82 @@ if (typeof Chart !== 'undefined') {
   });
 }
 
+// Shared categorical palette for multi-series charts.
+const BNL_PALETTE = [
+  '#0d6efd', '#20c997', '#fd7e14', '#6f42c1', '#d63384',
+  '#0dcaf0', '#198754', '#ffc107', '#dc3545', '#6c757d',
+];
+
+/**
+ * Render the "credits by usage type per week" stacked bar chart.
+ * @param {string} canvasId
+ * @param {{weeks:string[], series:{name:string,data:number[]}[]}} data
+ * @param {object} [opts]  { exportName, stacked }
+ * @returns {BNLChart|null}
+ */
+function renderUsageTypeChart(canvasId, data, opts = {}) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return null;
+  if (!data || !data.weeks || !data.weeks.length || !data.series.length) {
+    const host = canvas.parentElement;
+    if (host) host.innerHTML = '<div class="text-muted small p-3 text-center">No usage-type data available.</div>';
+    return null;
+  }
+  const stacked = opts.stacked !== false;
+  const datasets = data.series.map((s, i) => ({
+    label: s.name,
+    data: s.data,
+    backgroundColor: BNL_PALETTE[i % BNL_PALETTE.length],
+    borderWidth: 0,
+    borderRadius: 2,
+  }));
+  const chart = new BNLChart(canvasId, {
+    type: 'bar',
+    data: { labels: data.weeks, datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: true, position: 'bottom', labels: { font: { size: 10 }, boxWidth: 12, padding: 8, usePointStyle: true } },
+        tooltip: {
+          callbacks: {
+            title: items => 'Week of ' + items[0].label,
+            label: ctx => `  ${ctx.dataset.label}: ${Math.round(ctx.raw || 0).toLocaleString()} credits`,
+            footer: items => 'Total: ' + Math.round(items.reduce((s, i) => s + (i.raw || 0), 0)).toLocaleString(),
+          },
+        },
+      },
+      scales: {
+        x: { stacked, grid: { display: false }, ticks: { font: { size: 9 }, maxRotation: 45, maxTicksLimit: 24 } },
+        y: {
+          stacked, beginAtZero: true, grid: { color: 'rgba(0,0,0,.05)' },
+          ticks: { font: { size: 10 }, callback: v => v >= 1000 ? (v / 1000).toFixed(0) + 'k' : v },
+        },
+      },
+    },
+  }, { exportName: opts.exportName || 'Credits by Usage Type per Week' });
+  chart._stacked = stacked;
+  return chart;
+}
+
+/** Toggle a usage-type chart between stacked and grouped bars. */
+function setUsageTypeStacked(chart, stacked) {
+  if (!chart || !chart.chart) return;
+  chart._stacked = stacked;
+  chart.chart.options.scales.x.stacked = stacked;
+  chart.chart.options.scales.y.stacked = stacked;
+  chart.chart.update();
+}
+
+/** Toolbar handler: switch a named window chart's bar mode and toggle button state. */
+function setUsageTypeMode(varName, stacked, btn) {
+  setUsageTypeStacked(window[varName], stacked);
+  if (btn && btn.parentElement) {
+    Array.from(btn.parentElement.querySelectorAll('button'))
+      .forEach(b => b.classList.toggle('active', b === btn));
+  }
+}
+
 class BNLChart {
   /**
    * @param {string} canvasId
