@@ -1,4 +1,5 @@
 Priority:
+- CSS files <Style> on each template condensed, one or multiple .css sheets
 - outlier more filters
 - remove or optimize snapshot comparison graphing (smaller)
 - SETUP WIZARD:
