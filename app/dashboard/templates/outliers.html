@@ -225,7 +225,7 @@
         <table class="lb-table">
           <thead>
             <tr>
-              <th style="width:40px">#</th>
+              <th class="w-rank">#</th>
               {% for col in outlier_columns %}
               <th class="{% if col.align == 'end' %}text-end{% endif %}">{{ col.label }}</th>
               {% endfor %}

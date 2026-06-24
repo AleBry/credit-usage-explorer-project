@@ -3,6 +3,35 @@ UPDATES LOG
 ================================================================
 
 ----------------------------------------------------------------
+2026-06-24 (CSS consolidation + OOP diagnostics)
+----------------------------------------------------------------
+
+CSS CONSOLIDATION
+- Added a shared utility/component layer to bnl.css (cursor-pointer,
+  toggle-label, scroll-box, w-rank, color-swatch, acc-item/acc-btn,
+  text-2xs/xs/sm2, page-1100/1280) and migrated 30 repeated inline styles
+  across templates to those classes. No <style> blocks remain anywhere.
+
+BUILT-IN DIAGNOSTICS (object-oriented, extensible)
+- New app/shared/diagnostics.py: a Check base class + DiagnosticResult,
+  with Environment / Configuration / Data / Pipeline / Forecast / Alerts
+  checks, and a Diagnostics runner that times each and rolls up an overall
+  ok/warn/error status. Add a check by subclassing Check and appending to
+  Diagnostics.CHECKS.
+- New /debug (HTML dashboard) and /debug.json (machine-readable) routes,
+  exempt from the setup guard so they work even when config is broken.
+  Added a "Diagnostics" link in Settings.
+
+----------------------------------------------------------------
+2026-06-24 (tiers: switchable weekly chart)
+----------------------------------------------------------------
+
+- The Tiers weekly chart now has a breakdown dropdown in its toolbar:
+  By usage type / By model / By input-output. Switching re-renders the
+  chart instantly client-side (all three breakdowns are precomputed and
+  embedded as a JSON island). Still reflects the page filters.
+
+----------------------------------------------------------------
 2026-06-24 (fix: upload with missing config dir)
 ----------------------------------------------------------------
 

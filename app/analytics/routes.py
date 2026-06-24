@@ -6,7 +6,7 @@ from urllib.parse import urlencode
 import pandas as pd
 from flask import Blueprint, render_template, request
 
-from app.shared.chart_data import usage_type_weekly_json
+from app.shared.chart_data import usage_type_weekly, usage_type_weekly_json
 from app.shared.config_service import AppConfig
 from app.shared.data_store import CreditUsageData, DataStore
 from app.shared.ingestion import IngestionPipeline
@@ -170,7 +170,11 @@ def create_analytics_blueprint(
             lb_monthly=lb_monthly,
             lb_yearly=lb_yearly,
             base_query=urlencode(base_params),
-            usage_type_weekly=usage_type_weekly_json(df),
+            tiers_chart_data=json.dumps({
+                "type":  usage_type_weekly(df, type_col="usage_type_parsed_type"),
+                "model": usage_type_weekly(df, type_col="usage_type_model"),
+                "io":    usage_type_weekly(df, type_col="usage_type_io"),
+            }),
             min_credits=min_credits,
             max_credits=max_credits,
             zero_credits=zero_credits,

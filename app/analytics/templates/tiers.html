@@ -70,9 +70,18 @@
         </div>
       </form>
 
-      <!-- Credits by Usage Type per Week (reflects the filters above) -->
-      {{ chart_card("tiersUsageTypeChart", "Credits by Usage Type / Week", "tiersUsageTypeChart",
-                    subtitle="Reflects the filters above", height=240, bar_toggle=True) }}
+      <!-- Credits / Week — breakdown switchable via the dropdown (reflects the filters above) -->
+      {% set dim_dropdown %}
+      <select id="tiers-chart-dim" class="form-select form-select-sm" style="width:auto; font-size:.74rem;"
+              onchange="renderTiersChart(this.value)" title="Choose the chart breakdown">
+        <option value="type">By usage type</option>
+        <option value="model">By model</option>
+        <option value="io">By input / output</option>
+      </select>
+      {% endset %}
+      {{ chart_card("tiersChart", "Credits / Week", "tiersChart",
+                    subtitle="Reflects the filters above", height=240, bar_toggle=True, toolbar_extra=dim_dropdown) }}
+      <script type="application/json" id="tiers-chart-data">{{ tiers_chart_data | safe }}</script>
 
       <!-- TABS -->
       <div class="tier-tabs">
@@ -116,7 +125,7 @@
             <table class="lb-table">
               <thead>
                 <tr>
-                  <th style="width:40px">#</th>
+                  <th class="w-rank">#</th>
                   <th>Name</th>
                   <th>Email</th>
                   <th>Credits</th>
@@ -168,7 +177,7 @@
             <table class="lb-table">
               <thead>
                 <tr>
-                  <th style="width:40px">#</th>
+                  <th class="w-rank">#</th>
                   <th>Name</th>
                   <th>Usage Type</th>
                   <th>Credits</th>
@@ -219,7 +228,7 @@
             <table class="lb-table">
               <thead>
                 <tr>
-                  <th style="width:40px">#</th>
+                  <th class="w-rank">#</th>
                   <th>Model</th>
                   <th>Credits</th>
                   <th>Records</th>
@@ -268,7 +277,7 @@
             <table class="lb-table">
               <thead>
                 <tr>
-                  <th style="width:40px">#</th>
+                  <th class="w-rank">#</th>
                   <th>Usage Type</th>
                   <th>Credits</th>
                   <th>Records</th>
@@ -317,7 +326,7 @@
             <table class="lb-table">
               <thead>
                 <tr>
-                  <th style="width:40px">#</th>
+                  <th class="w-rank">#</th>
                   <th>Name</th>
                   <th>Email</th>
                   <th>Credits</th>
@@ -378,7 +387,7 @@
             <table class="lb-table">
               <thead>
                 <tr>
-                  <th style="width:40px">#</th>
+                  <th class="w-rank">#</th>
                   <th>Year</th>
                   <th>Credits</th>
                   <th>Records</th>
@@ -414,7 +423,7 @@
             <table class="lb-table">
               <thead>
                 <tr>
-                  <th style="width:40px">#</th>
+                  <th class="w-rank">#</th>
                   <th>Month</th>
                   <th>Credits</th>
                   <th>Records</th>
@@ -450,7 +459,7 @@
             <table class="lb-table">
               <thead>
                 <tr>
-                  <th style="width:40px">#</th>
+                  <th class="w-rank">#</th>
                   <th>Week of</th>
                   <th>Credits</th>
                   <th>Records</th>
@@ -486,7 +495,7 @@
             <table class="lb-table">
               <thead>
                 <tr>
-                  <th style="width:40px">#</th>
+                  <th class="w-rank">#</th>
                   <th>Date</th>
                   <th>Credits</th>
                   <th>Records</th>
@@ -519,6 +528,16 @@
       document.querySelectorAll('#filter-form select, #filter-form input[type="date"]').forEach(el => {
         el.addEventListener('change', () => document.getElementById('filter-form').submit());
       });
-      window.tiersUsageTypeChart = renderUsageTypeChart('tiersUsageTypeChart', {{ usage_type_weekly | safe }});
+
+      // Weekly chart with a switchable breakdown (usage type / model / I-O).
+      const TIERS_DIMS = JSON.parse(document.getElementById('tiers-chart-data').textContent);
+      const TIERS_TITLES = { type: 'Usage Type', model: 'Model', io: 'Input / Output' };
+      function renderTiersChart(dim) {
+        if (window.tiersChart && window.tiersChart.destroy) window.tiersChart.destroy();
+        const data = TIERS_DIMS[dim] || TIERS_DIMS.type;
+        window.tiersChart = renderUsageTypeChart('tiersChart', data,
+          { exportName: 'Credits by ' + (TIERS_TITLES[dim] || 'Usage Type') + ' per Week' });
+      }
+      renderTiersChart(document.getElementById('tiers-chart-dim').value || 'type');
     </script>
 {% endblock %}

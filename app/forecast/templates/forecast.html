@@ -265,22 +265,22 @@
       <span class="ms-auto d-flex align-items-center gap-2" style="font-size:.7rem; color:#6c757d;">
         <span style="font-weight:600;">Colors:</span>
         <label class="d-flex align-items-center gap-1 mb-0" title="Actual remaining line color">
-          <input type="color" id="color-actual" style="width:20px;height:20px;padding:1px;border:1px solid #dee2e6;border-radius:3px;cursor:pointer;" onchange="setBurndownColor('actual', this.value)">
+          <input type="color" id="color-actual" class="color-swatch" onchange="setBurndownColor('actual', this.value)">
           <span>Actual</span>
         </label>
         <label class="d-flex align-items-center gap-1 mb-0" title="Projected remaining line color">
-          <input type="color" id="color-proj" style="width:20px;height:20px;padding:1px;border:1px solid #dee2e6;border-radius:3px;cursor:pointer;" onchange="setBurndownColor('proj', this.value)">
+          <input type="color" id="color-proj" class="color-swatch" onchange="setBurndownColor('proj', this.value)">
           <span>Projected</span>
         </label>
         <label class="d-flex align-items-center gap-1 mb-0" title="Weekly burn bar color">
-          <input type="color" id="color-weekly" style="width:20px;height:20px;padding:1px;border:1px solid #dee2e6;border-radius:3px;cursor:pointer;" onchange="setBurndownColor('weekly', this.value)">
+          <input type="color" id="color-weekly" class="color-swatch" onchange="setBurndownColor('weekly', this.value)">
           <span>Weekly</span>
         </label>
         <button class="btn btn-link btn-sm p-0 text-muted" style="font-size:.68rem;" onclick="resetChartColors()" title="Reset to defaults">reset</button>
       </span>
     </div>
     <div style="position:relative; height: 300px;">
-      <canvas id="burndownChart" style="cursor:crosshair;"></canvas>
+      <canvas id="burndownChart" class="cursor-crosshair"></canvas>
     </div>
 
     {% if forecast_history %}
@@ -341,7 +341,7 @@
           </div>
         </div>
         <div style="position:relative; height: 240px;">
-          <canvas id="weeklyChart" style="cursor:crosshair;"></canvas>
+          <canvas id="weeklyChart" class="cursor-crosshair"></canvas>
         </div>
       </div>
     </div>
@@ -358,7 +358,7 @@
           </div>
         </div>
         <div style="position:relative; height: 240px;">
-          <canvas id="activeUsersChart" style="cursor:crosshair;"></canvas>
+          <canvas id="activeUsersChart" class="cursor-crosshair"></canvas>
         </div>
       </div>
     </div>
@@ -373,11 +373,11 @@
   <div class="accordion mb-4" id="detailsAccordion">
 
     <!-- Contract & Pacing -->
-    <div class="accordion-item" style="border-radius:10px; overflow:hidden; margin-bottom:.5rem; border:1px solid #e3e6ea;">
+    <div class="accordion-item acc-item">
       <h2 class="accordion-header">
-        <button class="accordion-button collapsed" type="button"
+        <button class="accordion-button collapsed acc-btn" type="button"
                 data-bs-toggle="collapse" data-bs-target="#acc-contract"
-                style="font-size:.85rem; font-weight:600; background:#f8f9fb;">
+               >
           Contract &amp; Pacing
           <span class="ms-2 badge bg-{{ pacing_colors.get(cs.pacing_status, 'secondary') }}" style="font-size:.72rem;">{{ cs.pacing_status | fmt_status }}</span>
         </button>
@@ -431,11 +431,11 @@
     </div>
 
     <!-- Forecast Projection -->
-    <div class="accordion-item" style="border-radius:10px; overflow:hidden; margin-bottom:.5rem; border:1px solid #e3e6ea;">
+    <div class="accordion-item acc-item">
       <h2 class="accordion-header">
-        <button class="accordion-button collapsed" type="button"
+        <button class="accordion-button collapsed acc-btn" type="button"
                 data-bs-toggle="collapse" data-bs-target="#acc-forecast"
-                style="font-size:.85rem; font-weight:600; background:#f8f9fb;">
+               >
           Forecast Projection
           <span class="ms-2 badge bg-{{ forecast_colors.get(fc.forecast_status, 'secondary') }}" style="font-size:.72rem;">{{ fc.forecast_status | fmt_status }}</span>
         </button>
@@ -480,11 +480,11 @@
     </div>
 
     <!-- Monte Carlo Simulation -->
-    <div class="accordion-item" style="border-radius:10px; overflow:hidden; margin-bottom:.5rem; border:1px solid #e3e6ea;">
+    <div class="accordion-item acc-item">
       <h2 class="accordion-header">
-        <button class="accordion-button collapsed" type="button"
+        <button class="accordion-button collapsed acc-btn" type="button"
                 data-bs-toggle="collapse" data-bs-target="#acc-mc"
-                style="font-size:.85rem; font-weight:600; background:#f8f9fb;">
+               >
           Monte Carlo Simulation
           <span class="ms-2 badge" id="mc-acc-badge" style="font-size:.72rem; display:none;"></span>
         </button>
@@ -497,11 +497,11 @@
     </div>
 
     <!-- Cumulative Burn chart -->
-    <div class="accordion-item" style="border-radius:10px; overflow:hidden; margin-bottom:.5rem; border:1px solid #e3e6ea;">
+    <div class="accordion-item acc-item">
       <h2 class="accordion-header">
-        <button class="accordion-button collapsed" type="button"
+        <button class="accordion-button collapsed acc-btn" type="button"
                 data-bs-toggle="collapse" data-bs-target="#acc-cumulative"
-                style="font-size:.85rem; font-weight:600; background:#f8f9fb;">
+               >
           Cumulative Credit Burn
         </button>
       </h2>
@@ -512,7 +512,7 @@
             <button class="btn btn-outline-secondary btn-sm py-0 px-2" title="Fullscreen" onclick="window.cumulativeChart && window.cumulativeChart.openFullscreen()">&#9974;</button>
           </div>
           <div style="position:relative; height:240px;">
-            <canvas id="cumulativeChart" style="cursor:crosshair;"></canvas>
+            <canvas id="cumulativeChart" class="cursor-crosshair"></canvas>
           </div>
         </div>
       </div>

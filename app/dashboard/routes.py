@@ -4,7 +4,7 @@ import io
 from pathlib import Path
 
 import pandas as pd
-from flask import Blueprint, flash, redirect, render_template, request, session, url_for
+from flask import Blueprint, flash, jsonify, redirect, render_template, request, session, url_for
 from werkzeug.utils import secure_filename
 
 from app.shared.alerts import evaluate_rules
@@ -79,6 +79,23 @@ def create_dashboard_blueprint(
     def setup_finish() -> object:
         session["setup_skipped"] = True
         return redirect(url_for("main.summary_page"))
+
+    # ── Built-in diagnostics ──
+    @bp.route("/debug", methods=["GET"])
+    def diagnostics_page() -> str:
+        from app.shared.diagnostics import Diagnostics
+        report = Diagnostics(store, pipeline, config_svc).run_all()
+        return render_template("diagnostics.html", report=report)
+
+    @bp.route("/debug.json", methods=["GET"])
+    def diagnostics_json() -> object:
+        from app.shared.diagnostics import Diagnostics
+        report = Diagnostics(store, pipeline, config_svc).run_all()
+        return jsonify({
+            "overall": report["overall"],
+            "total_ms": report["total_ms"],
+            "results": [r.to_dict() for r in report["results"]],
+        })
 
     @bp.route("/summary", methods=["GET"])
     def summary_page() -> str:

@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Diagnostics - Credit Usage Explorer{% endblock %}
+
+{% block body %}
+  {% set badge = {'ok': 'success', 'warn': 'warning', 'error': 'danger'} %}
+  <div class="container py-4 page-1100">
+
+    <div class="mb-3 d-flex justify-content-between align-items-start">
+      <div>
+        <h1 class="page-title">Diagnostics</h1>
+        <p class="page-subtitle">Built-in health checks for config, data, forecast, and alerts.</p>
+      </div>
+      <div class="text-end">
+        <span class="badge bg-{{ badge.get(report.overall, 'secondary') }}" style="font-size:.9rem;">
+          {{ report.overall | upper }}
+        </span>
+        <div class="text-muted text-xs mt-1">{{ report.total_ms }} ms ·
+          <a href="{{ url_for('main.diagnostics_json') }}">JSON</a> ·
+          <a href="{{ url_for('main.diagnostics_page') }}">re-run</a>
+        </div>
+      </div>
+    </div>
+
+    {% for r in report.results %}
+    <div class="dash-section">
+      <div class="dash-section-header">
+        <span class="dash-section-title">
+          <span class="badge bg-{{ badge.get(r.status, 'secondary') }} me-2">{{ r.status | upper }}</span>
+          {{ r.name }}
+        </span>
+        <span class="text-muted text-xs ms-auto">{{ r.elapsed_ms }} ms</span>
+      </div>
+      <div class="dash-section-body">
+        <p class="mb-2 {% if r.status == 'error' %}text-danger{% elif r.status == 'warn' %}text-warning{% else %}text-muted{% endif %}">
+          {{ r.summary }}
+        </p>
+        {% if r.details %}
+        <table class="lb-table">
+          <tbody>
+            {% for k, v in r.details.items() %}
+            <tr>
+              <td class="cell-muted" style="width:38%;">{{ k.replace('_', ' ') }}</td>
+              <td class="text-sm2">
+                {% if v is iterable and v is not string and v is not mapping %}{{ v | join(', ') }}
+                {% elif v is mapping %}{% for kk, vv in v.items() %}{{ kk }}: {{ vv }}{% if not loop.last %}, {% endif %}{% endfor %}
+                {% else %}{{ v }}{% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+
+  </div>
+{% endblock %}

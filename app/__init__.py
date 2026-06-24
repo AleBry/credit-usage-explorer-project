@@ -77,6 +77,7 @@ def create_app() -> Flask:
     _SETUP_EXEMPT = {
         "main.setup_page", "main.setup_save_config", "main.setup_skip",
         "main.setup_finish", "main.upload_data",
+        "main.diagnostics_page", "main.diagnostics_json",
     }
 
     @app.before_request
