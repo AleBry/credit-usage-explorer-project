@@ -22,8 +22,8 @@
              href="{{ url_for('analytics.tiers_page') }}">Tiers</a>
           <a class="app-nav-link {% if request.endpoint in ('analytics.user_cards_page', 'analytics.user_summary') %}active{% endif %}"
              href="{{ url_for('analytics.user_cards_page') }}">Users</a>
-          <a class="app-nav-link {% if request.endpoint == 'main.outliers_page' %}active{% endif %}"
-             href="{{ url_for('main.outliers_page') }}">Outliers</a>
+          <a class="app-nav-link {% if request.endpoint == 'main.alerts_page' %}active{% endif %}"
+             href="{{ url_for('main.alerts_page') }}">Alerts</a>
           <a class="app-nav-link {% if request.endpoint == 'forecast.forecast_page' %}active{% endif %}"
              href="{{ url_for('forecast.forecast_page') }}">Forecast</a>
           <a class="app-nav-link {% if request.endpoint and request.endpoint.startswith('settings.') %}active{% endif %}"

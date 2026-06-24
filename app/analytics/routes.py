@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 import json
+from io import BytesIO
 from urllib.parse import urlencode
 
 import pandas as pd
-from flask import Blueprint, render_template, request
+from flask import Blueprint, render_template, request, send_file
 
 from app.shared.chart_data import usage_type_weekly, usage_type_weekly_json
 from app.shared.data_store import CreditUsageData
+from app.shared.outliers import OUTLIER_VIEWS, compute_outliers
 from .service import Leaderboards
 
 
@@ -92,11 +94,8 @@ def create_analytics_blueprint(services) -> Blueprint:
             lb_monthly=lb_monthly,
             lb_yearly=lb_yearly,
             base_query=urlencode(base_params),
-            tiers_chart_data=json.dumps({
-                "type":  usage_type_weekly(df, type_col="usage_type_parsed_type"),
-                "model": usage_type_weekly(df, type_col="usage_type_model"),
-                "io":    usage_type_weekly(df, type_col="usage_type_io"),
-            }),
+            # Chart is broken down by usage type; the filters above narrow the data.
+            tiers_chart_data=json.dumps(usage_type_weekly(df, type_col="usage_type_parsed_type")),
             min_credits=min_credits,
             max_credits=max_credits,
             zero_credits=zero_credits,
@@ -245,6 +244,7 @@ def create_analytics_blueprint(services) -> Blueprint:
     @bp.route("/user-cards", methods=["GET"])
     def user_cards_page() -> str:
         d = data()
+        mode = "advanced" if request.args.get("mode", "basic").strip() == "advanced" else "basic"
         name_query = request.args.get("name_query", "").strip()
         email_query = request.args.get("email_query", "").strip()
         date_field = request.args.get("date_field", "")
@@ -255,44 +255,76 @@ def create_analytics_blueprint(services) -> Blueprint:
         max_credits = request.args.get("max_credits", "").strip()
         zero_credits = request.args.get("zero_credits", "")
 
+        # The name/email search applies in both modes.
         df = d.df.copy()
         if name_query and "name" in df.columns:
             df = df[df["name"].astype(str).str.contains(name_query, case=False, na=False, regex=False)]
         if email_query and "email" in df.columns:
             df = df[df["email"].astype(str).str.contains(email_query, case=False, na=False, regex=False)]
-        if date_field and (start_date or end_date):
-            df = d.filter_by_date(df, start_date, end_date, col=date_field)
-        df = d.filter_by_credits(df, min_credits, max_credits, zero_credits)
 
-        group_cols = [c for c in ["name", "email"] if c in df.columns]
-        user_list = []
-        if group_cols:
-            df = df.copy()
-            if "usage_units" in df.columns and "usage_quantity" in df.columns:
-                df["tokens_qty"] = df["usage_quantity"].where(df["usage_units"] == "tokens", 0.0)
-                df["counts_qty"] = df["usage_quantity"].where(df["usage_units"] == "counts", 0.0)
-                df["duration_qty"] = df["usage_quantity"].where(df["usage_units"] == "duration_s", 0.0)
-            else:
-                df["tokens_qty"] = df["counts_qty"] = df["duration_qty"] = 0.0
-            agg = (
-                df.groupby(group_cols)
-                .agg(
-                    rows=("usage_credits", "count"),
-                    total_credits=("usage_credits", "sum"),
-                    total_quantity=("usage_quantity", "sum"),
-                    total_tokens=("tokens_qty", "sum"),
-                    total_counts=("counts_qty", "sum"),
-                    total_duration_s=("duration_qty", "sum"),
-                )
-                .reset_index()
-                .sort_values("total_credits", ascending=False)
-                .head(top_n)
+        # Advanced (outlier) controls + result.
+        metric = request.args.get("metric", "per_user_window").strip()
+        if metric not in OUTLIER_VIEWS:
+            metric = "per_user_window"
+        credit_threshold = float(request.args.get("credit_threshold", 100) or 100)
+        lookback_days = int(request.args.get("lookback_days", 7) or 7)
+        adv_usage_type = request.args.get("usage_type_filter", "").strip()
+        adv_model = request.args.get("model_filter", "").strip()
+
+        all_types_list = (
+            sorted(d.df["usage_type_parsed_type"].dropna().unique().tolist())
+            if "usage_type_parsed_type" in d.df.columns else []
+        )
+        all_models_list = (
+            sorted(d.df["usage_type_model"].dropna().unique().tolist())
+            if "usage_type_model" in d.df.columns else []
+        )
+
+        user_list: list[dict] = []
+        outlier_rows: list[dict] = []
+        outlier_count = 0
+        outlier_columns: list[dict] = []
+        window_start = window_end = ""
+
+        if mode == "advanced":
+            outlier_rows, outlier_count, window_start, window_end, outlier_columns = compute_outliers(
+                df, metric, credit_threshold, lookback_days,
+                start_date=start_date, end_date=end_date,
+                usage_type_filter=adv_usage_type, model_filter=adv_model,
             )
-            user_list = agg.to_dict(orient="records")
+        else:
+            if date_field and (start_date or end_date):
+                df = d.filter_by_date(df, start_date, end_date, col=date_field)
+            df = d.filter_by_credits(df, min_credits, max_credits, zero_credits)
+            group_cols = [c for c in ["name", "email"] if c in df.columns]
+            if group_cols:
+                df = df.copy()
+                if "usage_units" in df.columns and "usage_quantity" in df.columns:
+                    df["tokens_qty"] = df["usage_quantity"].where(df["usage_units"] == "tokens", 0.0)
+                    df["counts_qty"] = df["usage_quantity"].where(df["usage_units"] == "counts", 0.0)
+                    df["duration_qty"] = df["usage_quantity"].where(df["usage_units"] == "duration_s", 0.0)
+                else:
+                    df["tokens_qty"] = df["counts_qty"] = df["duration_qty"] = 0.0
+                agg = (
+                    df.groupby(group_cols)
+                    .agg(
+                        rows=("usage_credits", "count"),
+                        total_credits=("usage_credits", "sum"),
+                        total_quantity=("usage_quantity", "sum"),
+                        total_tokens=("tokens_qty", "sum"),
+                        total_counts=("counts_qty", "sum"),
+                        total_duration_s=("duration_qty", "sum"),
+                    )
+                    .reset_index()
+                    .sort_values("total_credits", ascending=False)
+                    .head(top_n)
+                )
+                user_list = agg.to_dict(orient="records")
 
         return render_template(
             "user_cards.html",
             headers=d.columns,
+            mode=mode,
             name_query=name_query,
             email_query=email_query,
             date_field=date_field,
@@ -303,6 +335,68 @@ def create_analytics_blueprint(services) -> Blueprint:
             min_credits=min_credits,
             max_credits=max_credits,
             zero_credits=zero_credits,
+            # advanced mode
+            metric=metric,
+            outlier_views=OUTLIER_VIEWS,
+            outlier_rows=outlier_rows,
+            outlier_columns=outlier_columns,
+            outlier_count=outlier_count,
+            credit_threshold=credit_threshold,
+            lookback_days=lookback_days,
+            usage_type_filter=adv_usage_type,
+            model_filter=adv_model,
+            all_types_list=all_types_list,
+            all_models_list=all_models_list,
+            window_start=window_start,
+            window_end=window_end,
+        )
+
+    @bp.route("/user-cards/export", methods=["GET"])
+    def export_outliers() -> object:
+        """Download the current advanced-search outlier result as an .xlsx,
+        for pasting into emails/discussions. Mirrors user_cards_page's advanced
+        params so the export matches what's on screen.
+        """
+        d = data()
+        name_query = request.args.get("name_query", "").strip()
+        email_query = request.args.get("email_query", "").strip()
+        metric = request.args.get("metric", "per_user_window").strip()
+        if metric not in OUTLIER_VIEWS:
+            metric = "per_user_window"
+        credit_threshold = float(request.args.get("credit_threshold", 100) or 100)
+        lookback_days = int(request.args.get("lookback_days", 7) or 7)
+        adv_usage_type = request.args.get("usage_type_filter", "").strip()
+        adv_model = request.args.get("model_filter", "").strip()
+        start_date = request.args.get("start_date", "")
+        end_date = request.args.get("end_date", "")
+
+        df = d.df.copy()
+        if name_query and "name" in df.columns:
+            df = df[df["name"].astype(str).str.contains(name_query, case=False, na=False, regex=False)]
+        if email_query and "email" in df.columns:
+            df = df[df["email"].astype(str).str.contains(email_query, case=False, na=False, regex=False)]
+
+        rows, count, win_start, win_end, columns = compute_outliers(
+            df, metric, credit_threshold, lookback_days,
+            start_date=start_date, end_date=end_date,
+            usage_type_filter=adv_usage_type, model_filter=adv_model,
+        )
+
+        # Labeled DataFrame in the view's column order.
+        labels = [c["label"] for c in columns]
+        export_df = pd.DataFrame(
+            [{c["label"]: r.get(c["key"]) for c in columns} for r in rows],
+            columns=labels,
+        )
+
+        bio = BytesIO()
+        with pd.ExcelWriter(bio, engine="openpyxl") as writer:
+            export_df.to_excel(writer, index=False, sheet_name="Outliers")
+        bio.seek(0)
+        fname = f"outliers_{metric}_{win_start}_to_{win_end}.xlsx"
+        return send_file(
+            bio, as_attachment=True, download_name=fname,
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
 
     return bp

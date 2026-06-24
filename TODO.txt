@@ -1,7 +1,7 @@
 Fine tuning:
-- tiers list doesnt need drop down for charts as the filters already change it
-- generate ML snapshots too
 - Condensed GUI for forecasting
+- possible edit credits on the fly on forecasting graph 
+to provide a what-if-we-bought-more possible trend?
+
 - condensed GUI for records pages, outliers, users, etc
 (multiple views: cards, lists, etc)
-- combining user search with outlier search, making two separate modes (basic search, advanced searching) / (user card lists, "record" listing)

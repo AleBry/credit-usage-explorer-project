@@ -10,7 +10,7 @@
         <p class="page-subtitle">Current alerts from your data and forecast.</p>
       </div>
       <div class="d-flex gap-2">
-        <a class="btn btn-outline-primary btn-sm" href="{{ url_for('main.outliers_page', rules='open') }}#alert-rules">
+        <a class="btn btn-outline-primary btn-sm" href="{{ url_for('main.alerts_page') }}#alert-rules">
           &#9881; Set up alert triggers
         </a>
         {% if nav_alerts %}

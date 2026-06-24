@@ -86,7 +86,10 @@ def evaluate_rules(df, rules: list) -> list[dict]:
         if count > 0:
             plural = "s" if count != 1 else ""
             scope = (f" on {utype}" if utype else "") + (f" / {rmodel}" if rmodel else "")
-            link_args = {"metric": metric, "credit_threshold": int(threshold), "lookback_days": window}
+            link_args = {
+                "mode": "advanced", "metric": metric,
+                "credit_threshold": int(threshold), "lookback_days": window,
+            }
             if utype:
                 link_args["usage_type_filter"] = utype
             if rmodel:
@@ -97,8 +100,8 @@ def evaluate_rules(df, rules: list) -> list[dict]:
                 "title": f"{name}",
                 "detail": f"{count:,} {unit}{plural} over {threshold:,.0f} credits{scope} "
                           f"({cutoff.date()} → {max_date.date()}).",
-                # Click-through opens the matching outlier view, pre-filtered.
-                "link_endpoint": "main.outliers_page",
+                # Click-through opens the advanced outlier search, pre-filtered.
+                "link_endpoint": "analytics.user_cards_page",
                 "link_args": link_args,
             })
     return out

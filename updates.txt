@@ -3,6 +3,80 @@ UPDATES LOG
 ================================================================
 
 ----------------------------------------------------------------
+2026-06-24 (Rename outliers page -> alerts)
+----------------------------------------------------------------
+
+- Renamed the rules page (formerly "outliers") to "alerts" for consistency:
+    dashboard/outliers_routes.py  -> dashboard/alerts_routes.py
+    register_outliers_routes()    -> register_alerts_routes()
+    outliers_page()  /outliers    -> alerts_page()  /alerts
+    /outliers/rules/*             -> /alerts/rules/*
+    templates/outliers.html       -> templates/alerts.html
+  Updated nav, notifications link, and the blueprint wiring. /outliers now 404s.
+- KEPT the genuine outlier engine named "outliers" (it actually finds outliers):
+  app/shared/outliers.py, compute_outliers, OUTLIER_VIEWS, the outlier_table
+  macro, the advanced search and export_outliers. Renaming those would be wrong.
+- Verified: no dangling refs, /alerts renders + nav active, all pages green.
+
+----------------------------------------------------------------
+2026-06-24 (Alerts page + outlier Excel export)
+----------------------------------------------------------------
+
+- Outliers page repurposed into an "Alerts" rules hub: it now focuses on
+  creating/managing alert rules, with a prominent link to the advanced outlier
+  search. Removed the inline metric-driven outlier table (the advanced search
+  on the Users page now shows the records). Nav label renamed Outliers -> Alerts.
+- Alert click-throughs (notification bell + each rule's "triggering"/View link)
+  now deep-link to the advanced outlier search
+  (/user-cards?mode=advanced&metric=...&credit_threshold=...&lookback_days=...)
+  instead of the old outliers view.
+- Excel export: the advanced search has an "Export to Excel" button that
+  downloads the current outlier result as an .xlsx (openpyxl), labeled columns
+  per view, for pasting into emails/discussions. New route
+  analytics.export_outliers.
+- Slimmed outliers_page route (no longer computes the view); dropped the now
+  unused compute_outliers import there.
+- Verified: Alerts page, deep-links resolve to advanced search, xlsx export
+  (200 rows x 5 cols / per-record 6 cols), all pages + diagnostics green.
+
+----------------------------------------------------------------
+2026-06-24 (TODO: combined user + outlier search)
+----------------------------------------------------------------
+
+- Users page now has a Basic / Advanced mode toggle. Basic = the existing
+  user-card grid + name/email search. Advanced = adds threshold / metric /
+  lookback / type / model controls and lists the matching outlier records.
+  The name/email search carries across both modes.
+- Structure: moved the outlier engine (OUTLIER_VIEWS, compute_outliers, window
+  helpers) out of dashboard/service.py into app/shared/outliers.py, so both the
+  Outliers page (dashboard) and the Users advanced search (analytics) depend on
+  shared logic instead of analytics reaching into dashboard.
+- DRY: extracted the generic outlier/record table into a reusable Jinja macro
+  (templates/macros/outlier_table.html), now used by both the Outliers page and
+  the Users advanced mode. Also fixed a latent curly-quote bug on the user-card
+  date-range element.
+- Verified: outliers page intact, basic cards + advanced records both render,
+  thresholds flag correctly, all pages + diagnostics green.
+
+----------------------------------------------------------------
+2026-06-24 (TODO: tiers chart + ML snapshots)
+----------------------------------------------------------------
+
+- Tiers: removed the chart-breakdown dropdown (the filters above already
+  drive the chart). Chart now always shows the by-usage-type weekly breakdown;
+  the route stops computing the unused model/I-O breakdowns.
+- ML snapshots: every saved snapshot now also stores a linear-trend (ML)
+  projection alongside the deterministic + Monte Carlo data. New ml_* columns
+  in forecast_history.csv (slope, r_squared, p10/p50/p90 end balance) and an
+  "ml" series (p10/p50/p90 + slope + r_squared) in each snapshot's JSON.
+  Generated automatically (ML is cheap, so no skip flag needed in the weekly
+  batch). Added a "Linear trend (ML)" overlay toggle on the forecast burndown
+  chart, mirroring the Monte Carlo bands toggle.
+- Refactor: extracted ForecastingService.build_forecast_context(), now shared
+  by the model-data route, _run_mc, and the new _run_ml (removed the inline
+  context-building duplicated in the route).
+
+----------------------------------------------------------------
 2026-06-24 (Typed AlertRule + shared DictMixin)
 ----------------------------------------------------------------
 

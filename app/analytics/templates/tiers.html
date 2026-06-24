@@ -70,17 +70,9 @@
         </div>
       </form>
 
-      <!-- Credits / Week — breakdown switchable via the dropdown (reflects the filters above) -->
-      {% set dim_dropdown %}
-      <select id="tiers-chart-dim" class="form-select form-select-sm" style="width:auto; font-size:.74rem;"
-              onchange="renderTiersChart(this.value)" title="Choose the chart breakdown">
-        <option value="type">By usage type</option>
-        <option value="model">By model</option>
-        <option value="io">By input / output</option>
-      </select>
-      {% endset %}
+      <!-- Credits / Week by usage type — the filters above narrow the data. -->
       {{ chart_card("tiersChart", "Credits / Week", "tiersChart",
-                    subtitle="Reflects the filters above", height=240, bar_toggle=True, toolbar_extra=dim_dropdown) }}
+                    subtitle="By usage type — reflects the filters above", height=240, bar_toggle=True) }}
       <script type="application/json" id="tiers-chart-data">{{ tiers_chart_data | safe }}</script>
 
       <!-- TABS -->
@@ -529,15 +521,9 @@
         el.addEventListener('change', () => document.getElementById('filter-form').submit());
       });
 
-      // Weekly chart with a switchable breakdown (usage type / model / I-O).
-      const TIERS_DIMS = JSON.parse(document.getElementById('tiers-chart-data').textContent);
-      const TIERS_TITLES = { type: 'Usage Type', model: 'Model', io: 'Input / Output' };
-      function renderTiersChart(dim) {
-        if (window.tiersChart && window.tiersChart.destroy) window.tiersChart.destroy();
-        const data = TIERS_DIMS[dim] || TIERS_DIMS.type;
-        window.tiersChart = renderUsageTypeChart('tiersChart', data,
-          { exportName: 'Credits by ' + (TIERS_TITLES[dim] || 'Usage Type') + ' per Week' });
-      }
-      renderTiersChart(document.getElementById('tiers-chart-dim').value || 'type');
+      // Weekly chart, broken down by usage type (the filters above narrow the data).
+      const tiersData = JSON.parse(document.getElementById('tiers-chart-data').textContent);
+      window.tiersChart = renderUsageTypeChart('tiersChart', tiersData,
+        { exportName: 'Credits by Usage Type per Week' });
     </script>
 {% endblock %}

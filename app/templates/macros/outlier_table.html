@@ -1,0 +1,45 @@
+{# Generic outlier/record table. Columns are [{label,key,fmt,align}] from
+   shared.outliers.compute_outliers; each row links to that user's detail. #}
+{% macro outlier_table(columns, rows, window_start, window_end, credit_threshold) %}
+  {% if rows %}
+  <div style="overflow-x:auto;">
+    <table class="lb-table">
+      <thead>
+        <tr>
+          <th class="w-rank">#</th>
+          {% for col in columns %}
+          <th class="{% if col.align == 'end' %}text-end{% endif %}">{{ col.label }}</th>
+          {% endfor %}
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+        {% set view_url = url_for('analytics.user_summary',
+            name=row.get('name',''), email=row.get('email',''),
+            date_field='date_partition', start_date=window_start,
+            end_date=window_end, active_tab='records', fs='1') %}
+        <tr class="{% if loop.index == 1 %}rank-1{% elif loop.index == 2 %}rank-2{% elif loop.index == 3 %}rank-3{% endif %}"
+            style="cursor:pointer;" data-href="{{ view_url }}" onclick="window.location=this.dataset.href">
+          <td class="rank">{{ loop.index }}</td>
+          {% for col in columns %}
+          {% set v = row.get(col.key) %}
+          <td class="{% if col.align == 'end' %}text-end{% endif %} {% if col.fmt == 'credits' %}credits{% endif %} {% if col.fmt == 'muted' %}cell-muted{% endif %}">
+            {%- if col.fmt == 'credits' -%}{{ '{:,.0f}'.format(v | float) if v is not none else '—' }}
+            {%- elif col.fmt == 'int' -%}{{ '{:,}'.format(v | int) if v is not none else '—' }}
+            {%- else -%}{{ v if (v is not none and v != '') else '—' }}{%- endif -%}
+          </td>
+          {% endfor %}
+          <td><a class="drill-link" href="{{ view_url }}" onclick="event.stopPropagation()">View &rarr;</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="dash-section-body text-muted small">
+    Nothing crossed {{ '{:,.0f}'.format(credit_threshold) }} credits
+    between {{ window_start }} and {{ window_end }}.
+  </div>
+  {% endif %}
+{% endmacro %}

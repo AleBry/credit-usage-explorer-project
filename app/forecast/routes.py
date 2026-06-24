@@ -1,14 +1,13 @@
 from __future__ import annotations
 
 import copy
-import datetime as _dt
 
 import pandas as _pd
 from flask import Blueprint, flash, jsonify, redirect, render_template, request, url_for
 
 from app.shared.chart_data import usage_type_weekly_json
 from .models import PriceModel
-from .prediction import ForecastContext, get_model
+from .prediction import get_model
 from .service import ChartDataBuilder, ForecastingService
 
 
@@ -403,40 +402,10 @@ def create_forecast_blueprint(services) -> Blueprint:
         cs = svc.get_contract_status()
         fc = svc.get_forecast()
 
-        obs_parts = []
-        _obs_op = svc._forecast_op_df if svc._forecast_op_df is not None else svc.operational_df
-        for df in (_obs_op, svc.historical_df):
-            if df is not None and not df.empty and "total_credits_used" in df.columns:
-                obs_parts.append(df["total_credits_used"])
-        observations = _pd.concat(obs_parts) if obs_parts else _pd.Series(dtype="float64")
-
-        # Chronological in-contract weekly burns for trend models (LinearRegression).
-        if _obs_op is not None and not _obs_op.empty and "total_credits_used" in _obs_op.columns:
-            weekly_series = (
-                _obs_op.sort_values("week_start")["total_credits_used"]
-                if "week_start" in _obs_op.columns else _obs_op["total_credits_used"]
-            )
-        else:
-            weekly_series = None
-
-        raw_date = cs.get("latest_usage_date")
         try:
-            if isinstance(raw_date, _dt.date):
-                latest_date = raw_date
-            else:
-                latest_date = _dt.date.fromisoformat(str(raw_date)[:10])
+            ctx = svc.build_forecast_context(cs, fc)
         except (ValueError, TypeError):
             return jsonify({"error": "Invalid latest_usage_date"}), 500
-
-        ctx = ForecastContext(
-            credits_remaining=float(cs["credits_remaining"]),
-            weeks_remaining=float(cs["weeks_remaining"]),
-            latest_usage_date=latest_date,
-            purchased_credits=float(cs["purchased_credits"]),
-            forecast_weekly_burn=float(fc["forecast_weekly_burn"]),
-            observations=observations,
-            weekly_series=weekly_series,
-        )
 
         try:
             model = get_model(model_id, runs=runs)

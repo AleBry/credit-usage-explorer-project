@@ -1,266 +1,146 @@
 {% extends "base.html" %}
-{% block title %}Outliers - Credit Usage Explorer{% endblock %}
+{% block title %}Alerts - Credit Usage Explorer{% endblock %}
 
 {% block body %}
   <div class="container py-4" style="max-width: 1100px;">
 
-    <div class="mb-3">
-      <h1 class="page-title">Outliers</h1>
-      <p class="page-subtitle">
-        Who or what crossed a credit threshold &mdash; and the alert rules that watch for it.
-      </p>
+    <div class="mb-3 d-flex justify-content-between align-items-end flex-wrap gap-2">
+      <div>
+        <h1 class="page-title">Alerts</h1>
+        <p class="page-subtitle">
+          Define the rules that watch for outliers. Triggering rules show in the
+          notification bell and open the advanced outlier search.
+        </p>
+      </div>
+      <a class="btn btn-outline-primary btn-sm"
+         href="{{ url_for('analytics.user_cards_page', mode='advanced') }}">
+        Open advanced outlier search &rarr;
+      </a>
     </div>
 
-    {# ── Alert Rules (collapsible, so it doesn't clutter the page) ── #}
     {% set metric_labels = {
       'per_user_window': 'User total over the window',
       'per_user_day':    'User total in a single day',
       'per_record':      'Single prompt (one record)'
     } %}
-    {% set rules_open = request.args.get('rules') == 'open' %}
+
     <div class="dash-section" id="alert-rules">
       <div class="dash-section-header">
-        <span class="dash-section-title">Alert Rules</span>
+        <span class="dash-section-title">Alert Rules ({{ alert_rules | length }})</span>
         {% if rule_hits %}
         <span class="badge bg-danger ms-2" style="font-size:.66rem;">{{ rule_hits | length }} triggering</span>
         {% endif %}
-        <button class="btn btn-outline-secondary btn-sm ms-auto" type="button"
-                data-bs-toggle="collapse" data-bs-target="#alert-rules-body"
-                aria-expanded="{{ 'true' if rules_open else 'false' }}">
-          &#9881; Manage rules ({{ alert_rules | length }})
-        </button>
       </div>
-      <div class="collapse {% if rules_open %}show{% endif %}" id="alert-rules-body">
-        <div class="dash-section-body">
-          <p class="text-muted small mb-3">
-            Define your own alerts &mdash; e.g. a user burning over 1,000 credits in one prompt, or
-            anyone spending over 1,000 in a single day. Triggering rules show in the notification bell,
-            and clicking one opens the matching view below.
-          </p>
+      <div class="dash-section-body">
+        <p class="text-muted small mb-3">
+          Define your own alerts &mdash; e.g. a user burning over 1,000 credits in one prompt, or
+          anyone spending over 1,000 in a single day. Triggering rules show in the notification bell;
+          clicking one opens the matching records in the advanced outlier search.
+        </p>
 
-          {% if alert_rules %}
-          <table class="lb-table mb-3">
-            <thead>
-              <tr>
-                <th>Rule</th>
-                <th>Condition</th>
-                <th class="text-end">Threshold</th>
-                <th class="text-end">Window</th>
-                <th>Status</th>
-                <th style="width:120px;"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for r in alert_rules %}
-              <tr class="{% if not r.enabled %}rule-row-off{% endif %}">
-                <td class="fw-semibold">{{ r.name }}</td>
-                <td style="font-size:.8rem; color:#555c6b;">
-                  {{ metric_labels.get(r.metric, r.metric) }}
-                  {% if r.usage_type %}<span class="badge bg-light text-dark border ms-1">{{ r.usage_type }}</span>{% endif %}
-                  {% if r.model %}<span class="badge bg-light text-dark border">{{ r.model }}</span>{% endif %}
-                </td>
-                <td class="text-end">{{ '{:,.0f}'.format(r.threshold) }}</td>
-                <td class="text-end">{{ r.window_days }}d</td>
-                <td style="font-size:.8rem;">
-                  {% if not r.enabled %}
-                    <span class="text-muted">disabled</span>
-                  {% elif rule_hits.get(r.id) %}
-                    <a class="text-danger text-decoration-none"
-                       href="{{ url_for('main.outliers_page', metric=r.metric, credit_threshold=r.threshold|int, lookback_days=r.window_days) }}"
-                       title="{{ rule_hits.get(r.id) }} — view matches">&#9679; triggering</a>
-                  {% else %}
-                    <span class="text-success">&#9679; clear</span>
-                  {% endif %}
-                </td>
-                <td class="text-nowrap text-end">
-                  <form method="post" action="{{ url_for('main.toggle_alert_rule', rule_id=r.id) }}" class="d-inline">
-                    <button class="btn btn-link btn-sm p-0 me-2" type="submit">{{ 'Disable' if r.enabled else 'Enable' }}</button>
-                  </form>
-                  <form method="post" action="{{ url_for('main.delete_alert_rule', rule_id=r.id) }}" class="d-inline"
-                        onsubmit="return confirm('Delete this rule?');">
-                    <button class="btn btn-link btn-sm p-0 text-danger" type="submit">Delete</button>
-                  </form>
-                </td>
-              </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-          {% else %}
-          <p class="text-muted small">No rules yet — add one below.</p>
-          {% endif %}
-
-          <form method="post" action="{{ url_for('main.add_alert_rule') }}">
-            <div class="row g-2 align-items-end mb-2">
-              <div class="col-md-3">
-                <label class="form-label">Rule name</label>
-                <input class="form-control form-control-sm" type="text" name="name" placeholder="e.g. Big Codex prompt" required>
-              </div>
-              <div class="col-md-3">
-                <label class="form-label">When</label>
-                <select class="form-select form-select-sm" name="metric">
-                  <option value="per_user_window">User total over the window</option>
-                  <option value="per_user_day">User total in a single day</option>
-                  <option value="per_record">Single prompt (one record)</option>
-                </select>
-              </div>
-              <div class="col-md-3">
-                <label class="form-label">Usage type</label>
-                <select class="form-select form-select-sm" name="usage_type">
-                  <option value="">All types</option>
-                  {% for t in all_types_list %}
-                  <option value="{{ t }}">{{ t }}</option>
-                  {% endfor %}
-                </select>
-              </div>
-              <div class="col-md-3">
-                <label class="form-label">Model</label>
-                <select class="form-select form-select-sm" name="model">
-                  <option value="">All models</option>
-                  {% for m in all_models_list %}
-                  <option value="{{ m }}">{{ m }}</option>
-                  {% endfor %}
-                </select>
-              </div>
-            </div>
-            <div class="row g-2 align-items-end">
-              <div class="col-md-3">
-                <label class="form-label">Over (credits)</label>
-                <input class="form-control form-control-sm" type="number" name="threshold" value="1000" min="0" step="1" required>
-              </div>
-              <div class="col-md-3">
-                <label class="form-label">In last (days)</label>
-                <input class="form-control form-control-sm" type="number" name="window_days" value="7" min="1" max="365" step="1" required>
-              </div>
-              <div class="col-md-3"></div>
-              <div class="col-md-3">
-                <button class="btn btn-primary btn-sm w-100" type="submit">Add rule</button>
-              </div>
-            </div>
-          </form>
-        </div>
-      </div>
-    </div>
-
-    {# ── Outlier view (driven by the selected metric) ── #}
-    <div class="dash-section">
-      <div class="dash-section-header">
-        <span class="dash-section-title">{{ outlier_views[metric] }}</span>
-        {% if outlier_count > 0 %}
-        <span class="outlier-badge" style="font-size:.75rem;">{{ outlier_count }} flagged</span>
-        {% endif %}
-      </div>
-
-      <!-- Filter controls -->
-      <form method="get" action="{{ url_for('main.outliers_page') }}" class="dash-section-body pb-0">
-        <div class="row g-2 align-items-end mb-2">
-          <div class="col-sm-3">
-            <label class="form-label">View</label>
-            <select class="form-select form-select-sm" name="metric">
-              {% for key, label in outlier_views.items() %}
-              <option value="{{ key }}" {% if metric == key %}selected{% endif %}>{{ label }}</option>
-              {% endfor %}
-            </select>
-          </div>
-          <div class="col-sm-2">
-            <label class="form-label">Over (credits)</label>
-            <input class="form-control form-control-sm" type="number" name="credit_threshold"
-                   value="{{ credit_threshold }}" min="0" step="1" placeholder="100">
-          </div>
-          <div class="col-sm-2">
-            <label class="form-label">Lookback (days)</label>
-            <input class="form-control form-control-sm" type="number" name="lookback_days"
-                   value="{{ lookback_days }}" min="1" max="365" step="1" placeholder="7">
-          </div>
-          <div class="col-sm-3">
-            <label class="form-label">Usage type</label>
-            <select class="form-select form-select-sm" name="usage_type_filter">
-              <option value="">All types</option>
-              {% for t in all_types_list %}
-              <option value="{{ t }}" {% if usage_type_filter == t %}selected{% endif %}>{{ t }}</option>
-              {% endfor %}
-            </select>
-          </div>
-          <div class="col-sm-2">
-            <button class="btn btn-primary btn-sm w-100" type="submit">Apply</button>
-          </div>
-        </div>
-        <div class="row g-2 align-items-end mb-2">
-          <div class="col-sm-3">
-            <label class="form-label">Start date <span class="text-muted">(optional)</span></label>
-            <input class="form-control form-control-sm" type="date" name="start_date" value="{{ start_date }}">
-          </div>
-          <div class="col-sm-3">
-            <label class="form-label">End date <span class="text-muted">(optional)</span></label>
-            <input class="form-control form-control-sm" type="date" name="end_date" value="{{ end_date }}">
-          </div>
-          <div class="col-sm-3">
-            <label class="form-label">Model</label>
-            <select class="form-select form-select-sm" name="model_filter">
-              <option value="">All models</option>
-              {% for m in all_models_list %}
-              <option value="{{ m }}" {% if model_filter == m %}selected{% endif %}>{{ m }}</option>
-              {% endfor %}
-            </select>
-          </div>
-          <div class="col-sm-3 pb-1">
-            <span class="text-muted small">
-              Window: <strong>{{ lookback_start_date }} &rarr; {{ lookback_end_date }}</strong>
-              {% if use_date_range %}<span class="badge bg-info text-dark ms-1">date range</span>{% endif %}
-            </span>
-          </div>
-        </div>
-        {% if usage_type_filter or model_filter or use_date_range %}
-        <div class="mb-3">
-          <span class="badge bg-primary" style="font-weight:500;">
-            {{ usage_type_filter or 'all types' }}{% if model_filter %} &middot; {{ model_filter }}{% endif %}
-            &middot; {{ lookback_start_date }} &rarr; {{ lookback_end_date }}
-          </span>
-          <a href="{{ url_for('main.outliers_page', metric=metric) }}" class="small ms-2">clear</a>
-        </div>
-        {% endif %}
-      </form>
-
-      {% if outlier_rows %}
-      <div style="overflow-x:auto;">
-        <table class="lb-table">
+        {% if alert_rules %}
+        <table class="lb-table mb-3">
           <thead>
             <tr>
-              <th class="w-rank">#</th>
-              {% for col in outlier_columns %}
-              <th class="{% if col.align == 'end' %}text-end{% endif %}">{{ col.label }}</th>
-              {% endfor %}
-              <th></th>
+              <th>Rule</th>
+              <th>Condition</th>
+              <th class="text-end">Threshold</th>
+              <th class="text-end">Window</th>
+              <th>Status</th>
+              <th style="width:160px;"></th>
             </tr>
           </thead>
           <tbody>
-            {% for row in outlier_rows %}
-            {% set view_url = url_for('analytics.user_summary',
-                name=row.get('name',''), email=row.get('email',''),
-                date_field='date_partition', start_date=lookback_start_date,
-                end_date=lookback_end_date, active_tab='records', fs='1') %}
-            <tr class="{% if loop.index == 1 %}rank-1{% elif loop.index == 2 %}rank-2{% elif loop.index == 3 %}rank-3{% endif %}"
-                style="cursor:pointer;" data-href="{{ view_url }}" onclick="window.location=this.dataset.href">
-              <td class="rank">{{ loop.index }}</td>
-              {% for col in outlier_columns %}
-              {% set v = row.get(col.key) %}
-              <td class="{% if col.align == 'end' %}text-end{% endif %} {% if col.fmt == 'credits' %}credits{% endif %} {% if col.fmt == 'muted' %}cell-muted{% endif %}">
-                {%- if col.fmt == 'credits' -%}{{ '{:,.0f}'.format(v | float) if v is not none else '—' }}
-                {%- elif col.fmt == 'int' -%}{{ '{:,}'.format(v | int) if v is not none else '—' }}
-                {%- else -%}{{ v if (v is not none and v != '') else '—' }}{%- endif -%}
+            {% for r in alert_rules %}
+            {% set search_url = url_for('analytics.user_cards_page', mode='advanced',
+                metric=r.metric, credit_threshold=r.threshold|int, lookback_days=r.window_days,
+                usage_type_filter=r.usage_type, model_filter=r.model) %}
+            <tr class="{% if not r.enabled %}rule-row-off{% endif %}">
+              <td class="fw-semibold">{{ r.name }}</td>
+              <td style="font-size:.8rem; color:#555c6b;">
+                {{ metric_labels.get(r.metric, r.metric) }}
+                {% if r.usage_type %}<span class="badge bg-light text-dark border ms-1">{{ r.usage_type }}</span>{% endif %}
+                {% if r.model %}<span class="badge bg-light text-dark border">{{ r.model }}</span>{% endif %}
               </td>
-              {% endfor %}
-              <td><a class="drill-link" href="{{ view_url }}" onclick="event.stopPropagation()">View &rarr;</a></td>
+              <td class="text-end">{{ '{:,.0f}'.format(r.threshold) }}</td>
+              <td class="text-end">{{ r.window_days }}d</td>
+              <td style="font-size:.8rem;">
+                {% if not r.enabled %}
+                  <span class="text-muted">disabled</span>
+                {% elif rule_hits.get(r.id) %}
+                  <a class="text-danger text-decoration-none" href="{{ search_url }}"
+                     title="{{ rule_hits.get(r.id) }} — view matches">&#9679; triggering</a>
+                {% else %}
+                  <span class="text-success">&#9679; clear</span>
+                {% endif %}
+              </td>
+              <td class="text-nowrap text-end">
+                <a class="btn btn-link btn-sm p-0 me-2" href="{{ search_url }}">View</a>
+                <form method="post" action="{{ url_for('main.toggle_alert_rule', rule_id=r.id) }}" class="d-inline">
+                  <button class="btn btn-link btn-sm p-0 me-2" type="submit">{{ 'Disable' if r.enabled else 'Enable' }}</button>
+                </form>
+                <form method="post" action="{{ url_for('main.delete_alert_rule', rule_id=r.id) }}" class="d-inline"
+                      onsubmit="return confirm('Delete this rule?');">
+                  <button class="btn btn-link btn-sm p-0 text-danger" type="submit">Delete</button>
+                </form>
+              </td>
             </tr>
             {% endfor %}
           </tbody>
         </table>
+        {% else %}
+        <p class="text-muted small">No rules yet — add one below.</p>
+        {% endif %}
+
+        <form method="post" action="{{ url_for('main.add_alert_rule') }}">
+          <div class="row g-2 align-items-end mb-2">
+            <div class="col-md-3">
+              <label class="form-label">Rule name</label>
+              <input class="form-control form-control-sm" type="text" name="name" placeholder="e.g. Big Codex prompt" required>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">When</label>
+              <select class="form-select form-select-sm" name="metric">
+                <option value="per_user_window">User total over the window</option>
+                <option value="per_user_day">User total in a single day</option>
+                <option value="per_record">Single prompt (one record)</option>
+              </select>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Usage type</label>
+              <select class="form-select form-select-sm" name="usage_type">
+                <option value="">All types</option>
+                {% for t in all_types_list %}
+                <option value="{{ t }}">{{ t }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Model</label>
+              <select class="form-select form-select-sm" name="model">
+                <option value="">All models</option>
+                {% for m in all_models_list %}
+                <option value="{{ m }}">{{ m }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+          <div class="row g-2 align-items-end">
+            <div class="col-md-3">
+              <label class="form-label">Over (credits)</label>
+              <input class="form-control form-control-sm" type="number" name="threshold" value="1000" min="0" step="1" required>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">In last (days)</label>
+              <input class="form-control form-control-sm" type="number" name="window_days" value="7" min="1" max="365" step="1" required>
+            </div>
+            <div class="col-md-3"></div>
+            <div class="col-md-3">
+              <button class="btn btn-primary btn-sm w-100" type="submit">Add rule</button>
+            </div>
+          </div>
+        </form>
       </div>
-      {% else %}
-      <div class="dash-section-body text-muted small">
-        Nothing crossed {{ '{:,.0f}'.format(credit_threshold) }} credits
-        between {{ lookback_start_date }} and {{ lookback_end_date }}.
-      </div>
-      {% endif %}
     </div>
 
   </div>

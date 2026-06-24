@@ -315,6 +315,11 @@
         <input type="checkbox" class="form-check-input mt-0" id="snap-mc-toggle" onchange="toggleSnapMc(this.checked)">
         Monte Carlo bands
       </label>
+      <label class="d-flex align-items-center gap-1 mb-0 ms-1" style="cursor:pointer; font-size:.74rem; color:#6c757d;"
+             title="Overlay each selected snapshot's linear-trend (ML) projection + residual bands">
+        <input type="checkbox" class="form-check-input mt-0" id="snap-ml-toggle" onchange="toggleSnapMl(this.checked)">
+        Linear trend (ML)
+      </label>
       <span id="quick-select-pills" class="d-flex gap-1 flex-wrap align-items-center"></span>
     </div>
     {% endif %}

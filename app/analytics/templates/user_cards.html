@@ -1,16 +1,117 @@
-﻿{% extends "base.html" %}
+{% extends "base.html" %}
+{% from "macros/outlier_table.html" import outlier_table %}
 {% block title %}Users - Credit Usage Explorer{% endblock %}
 
 {% block body %}
     <div class="container py-4" style="max-width: 1280px;">
 
-      <!-- HEADER -->
-      <div class="mb-4">
-        <h1 class="page-title">Users</h1>
-        <p class="page-subtitle">Search for users and view aggregated credit usage.</p>
+      <!-- HEADER + MODE TOGGLE -->
+      <div class="mb-4 d-flex justify-content-between align-items-end flex-wrap gap-2">
+        <div>
+          <h1 class="page-title">Users</h1>
+          <p class="page-subtitle">
+            {% if mode == 'advanced' %}Find users / records over a credit threshold.
+            {% else %}Search users and view aggregated credit usage.{% endif %}
+          </p>
+        </div>
+        <div class="btn-group" role="group" aria-label="Search mode">
+          <a class="btn btn-sm {{ 'btn-primary' if mode != 'advanced' else 'btn-outline-primary' }}"
+             href="{{ url_for('analytics.user_cards_page', mode='basic', name_query=name_query, email_query=email_query) }}">Basic</a>
+          <a class="btn btn-sm {{ 'btn-primary' if mode == 'advanced' else 'btn-outline-primary' }}"
+             href="{{ url_for('analytics.user_cards_page', mode='advanced', name_query=name_query, email_query=email_query) }}">Advanced</a>
+        </div>
       </div>
 
-      <!-- FILTERS -->
+      {% if mode == 'advanced' %}
+      <!-- ADVANCED: threshold / outlier record search -->
+      <form method="get" action="{{ url_for('analytics.user_cards_page') }}">
+        <input type="hidden" name="mode" value="advanced">
+        <div class="filter-card">
+          <div class="section-label">Advanced search — who/what crossed a credit threshold</div>
+          <div class="row g-2 align-items-end">
+            <div class="col-md-3">
+              <label class="form-label">Name contains</label>
+              <input class="form-control form-control-sm" name="name_query" value="{{ name_query }}" placeholder="Partial name">
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Email contains</label>
+              <input class="form-control form-control-sm" name="email_query" value="{{ email_query }}" placeholder="Email or domain">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">View</label>
+              <select class="form-select form-select-sm" name="metric">
+                {% for key, label in outlier_views.items() %}
+                <option value="{{ key }}" {% if metric == key %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-2">
+              <label class="form-label">&nbsp;</label>
+              <button class="btn btn-primary btn-sm w-100">Search</button>
+            </div>
+          </div>
+          <div class="row g-2 align-items-end mt-1">
+            <div class="col-md-2">
+              <label class="form-label">Over (credits)</label>
+              <input class="form-control form-control-sm" type="number" name="credit_threshold" value="{{ credit_threshold }}" min="0" step="1">
+            </div>
+            <div class="col-md-2">
+              <label class="form-label">Lookback (days)</label>
+              <input class="form-control form-control-sm" type="number" name="lookback_days" value="{{ lookback_days }}" min="1" max="365" step="1">
+            </div>
+            <div class="col-md-2">
+              <label class="form-label">Start date <span class="text-muted">(opt.)</span></label>
+              <input class="form-control form-control-sm" type="date" name="start_date" value="{{ start_date }}">
+            </div>
+            <div class="col-md-2">
+              <label class="form-label">End date <span class="text-muted">(opt.)</span></label>
+              <input class="form-control form-control-sm" type="date" name="end_date" value="{{ end_date }}">
+            </div>
+            <div class="col-md-2">
+              <label class="form-label">Usage type</label>
+              <select class="form-select form-select-sm" name="usage_type_filter">
+                <option value="">All types</option>
+                {% for t in all_types_list %}
+                <option value="{{ t }}" {% if usage_type_filter == t %}selected{% endif %}>{{ t }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-2">
+              <label class="form-label">Model</label>
+              <select class="form-select form-select-sm" name="model_filter">
+                <option value="">All models</option>
+                {% for m in all_models_list %}
+                <option value="{{ m }}" {% if model_filter == m %}selected{% endif %}>{{ m }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+        </div>
+      </form>
+
+      <div class="dash-section">
+        <div class="dash-section-header">
+          <span class="dash-section-title">{{ outlier_views[metric] }}</span>
+          {% if outlier_count > 0 %}
+          <span class="outlier-badge" style="font-size:.75rem;">{{ outlier_count }} flagged</span>
+          {% endif %}
+          {% if outlier_rows %}
+          <a class="btn btn-outline-success btn-sm ms-auto"
+             href="{{ url_for('analytics.export_outliers', name_query=name_query, email_query=email_query,
+               metric=metric, credit_threshold=credit_threshold|int, lookback_days=lookback_days,
+               usage_type_filter=usage_type_filter, model_filter=model_filter,
+               start_date=start_date, end_date=end_date) }}"
+             title="Download these outliers as an Excel sheet">&#8681; Export to Excel</a>
+          {% endif %}
+        </div>
+        {% if window_start %}
+        <div class="px-3 pt-2 muted-help">Window: <strong>{{ window_start }} &rarr; {{ window_end }}</strong></div>
+        {% endif %}
+        {{ outlier_table(outlier_columns, outlier_rows, window_start, window_end, credit_threshold) }}
+      </div>
+
+      {% else %}
+      <!-- BASIC: user-card search -->
       <form method="get" action="{{ url_for('analytics.user_cards_page') }}">
         <div class="filter-card">
           <div class="section-label">User Search</div>
@@ -19,24 +120,12 @@
           <div class="row g-2 align-items-end">
             <div class="col-md-4">
               <label class="form-label">Name contains</label>
-              <input
-                class="form-control form-control-sm"
-                name="name_query"
-                value="{{ name_query }}"
-                placeholder="Partial name"
-              >
+              <input class="form-control form-control-sm" name="name_query" value="{{ name_query }}" placeholder="Partial name">
             </div>
-
             <div class="col-md-4">
               <label class="form-label">Email contains</label>
-              <input
-                class="form-control form-control-sm"
-                name="email_query"
-                value="{{ email_query }}"
-                placeholder="Email or domain"
-              >
+              <input class="form-control form-control-sm" name="email_query" value="{{ email_query }}" placeholder="Email or domain">
             </div>
-
             <div class="col-md-2">
               <label class="form-label">Date field</label>
               <select class="form-select form-select-sm" name="date_field">
@@ -46,19 +135,10 @@
                 {% endfor %}
               </select>
             </div>
-
             <div class="col-md-1">
               <label class="form-label">Top</label>
-              <input
-                class="form-control form-control-sm"
-                name="top_n"
-                value="{{ top_n }}"
-                type="number"
-                min="1"
-                max="200"
-              >
+              <input class="form-control form-control-sm" name="top_n" value="{{ top_n }}" type="number" min="1" max="200">
             </div>
-
             <div class="col-md-1">
               <label class="form-label">&nbsp;</label>
               <button class="btn btn-primary btn-sm w-100">Search</button>
@@ -71,17 +151,13 @@
               <label class="form-label">Start date</label>
               <input class="form-control form-control-sm" type="date" name="start_date" value="{{ start_date }}">
             </div>
-
             <div class="col-md-2">
               <label class="form-label">End date</label>
               <input class="form-control form-control-sm" type="date" name="end_date" value="{{ end_date }}">
             </div>
-
             <div class="col-md-2">
               <label class="form-label">&nbsp;</label>
-              <a class="btn btn-outline-secondary btn-sm w-100" href="{{ url_for('analytics.user_cards_page') }}">
-                Clear
-              </a>
+              <a class="btn btn-outline-secondary btn-sm w-100" href="{{ url_for('analytics.user_cards_page') }}">Clear</a>
             </div>
           </div>
 
@@ -89,39 +165,16 @@
           <div class="row g-2 align-items-end credits-filter-row">
             <div class="col-md-2">
               <label class="form-label">Min credits</label>
-              <input
-                class="form-control form-control-sm"
-                type="number"
-                step="any"
-                name="min_credits"
-                value="{{ min_credits }}"
-                placeholder="e.g. 10"
-              >
+              <input class="form-control form-control-sm" type="number" step="any" name="min_credits" value="{{ min_credits }}" placeholder="e.g. 10">
             </div>
-
             <div class="col-md-2">
               <label class="form-label">Max credits</label>
-              <input
-                class="form-control form-control-sm"
-                type="number"
-                step="any"
-                name="max_credits"
-                value="{{ max_credits }}"
-                placeholder="e.g. 500"
-              >
+              <input class="form-control form-control-sm" type="number" step="any" name="max_credits" value="{{ max_credits }}" placeholder="e.g. 500">
             </div>
-
             <div class="col-md-3 d-flex align-items-end pb-1">
               <div class="form-check mb-0">
-                <input
-                  class="form-check-input"
-                  type="checkbox"
-                  name="zero_credits"
-                  value="1"
-                  id="zero_credits_cards"
-                  {% if zero_credits == '1' %}checked{% endif %}
-                  onchange="this.closest('form').submit()"
-                >
+                <input class="form-check-input" type="checkbox" name="zero_credits" value="1" id="zero_credits_cards"
+                       {% if zero_credits == '1' %}checked{% endif %} onchange="this.closest('form').submit()">
                 <label class="form-check-label" for="zero_credits_cards">Zero credits only</label>
               </div>
             </div>
@@ -142,45 +195,28 @@
       <div class="row g-3">
         {% for u in users %}
         <div class="col-md-4">
-          <a
-            class="user-card-link"
-            href="{{ url_for('analytics.user_summary',
-              name=u.name or '',
-              email=u.email or '',
-              date_field=date_field,
-              start_date=start_date,
-              end_date=end_date
-            ) }}"
-          >
+          <a class="user-card-link"
+             href="{{ url_for('analytics.user_summary', name=u.name or '', email=u.email or '',
+               date_field=date_field, start_date=start_date, end_date=end_date) }}">
             <div class="user-card">
               <div class="user-card-body">
                 <div class="user-name">{{ u.name or u.email or 'Unknown user' }}</div>
-
-                {% if u.email %}
-                <div class="user-email">{{ u.email }}</div>
-                {% endif %}
-
+                {% if u.email %}<div class="user-email">{{ u.email }}</div>{% endif %}
                 {% if start_date or end_date %}
-                <div class=”date-range”>
-                  {{ start_date or 'All time' }} &ndash; {{ end_date or 'All time' }}
-                </div>
+                <div class="date-range">{{ start_date or 'All time' }} &ndash; {{ end_date or 'All time' }}</div>
                 {% endif %}
-
                 <div class="metric-row">
                   <span class="metric-label">Records</span>
                   <span class="metric-value">{{ '{:,}'.format(u.rows) }}</span>
                 </div>
-
                 <div class="metric-row">
                   <span class="metric-label">Credits</span>
                   <span class="metric-value">{{ '{:,.2f}'.format(u.total_credits) }}</span>
                 </div>
-
                 <div class="metric-row">
                   <span class="metric-label">Tokens</span>
                   <span class="metric-value">{{ '{:,.0f}'.format(u.total_tokens if u.total_tokens is defined else 0) }}</span>
                 </div>
-
                 {% if u.total_counts is defined and u.total_counts %}
                 <div class="metric-row">
                   <span class="metric-label">Counts</span>
@@ -197,6 +233,7 @@
         </div>
         {% endfor %}
       </div>
+      {% endif %}
 
     </div>
 {% endblock %}
@@ -208,4 +245,3 @@
       });
     </script>
 {% endblock %}
-

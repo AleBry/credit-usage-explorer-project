@@ -16,7 +16,7 @@ from app.forecast.service import ChartDataBuilder
 from .service import compute_summary_metrics, compute_weekly_trend
 from .setup_routes import register_setup_routes
 from .diagnostics_routes import register_diagnostics_routes
-from .outliers_routes import register_outliers_routes
+from .alerts_routes import register_alerts_routes
 from .upload_routes import register_upload_routes
 
 
@@ -148,7 +148,7 @@ def create_dashboard_blueprint(services) -> Blueprint:
     # ── Concern modules register their routes onto this same blueprint ──
     register_setup_routes(bp, services)
     register_diagnostics_routes(bp, services)
-    register_outliers_routes(bp, services)
+    register_alerts_routes(bp, services)
     register_upload_routes(bp, services)
 
     return bp

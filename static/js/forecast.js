@@ -112,6 +112,28 @@ function updateBurndownOverlays() {
           backgroundColor: 'transparent', fill: false, tension: 0.1, pointRadius: 0, spanGaps: false, _snapOverlay: true,
         });
       }
+
+      const ml = series && series.ml;
+      if (window.showSnapMl && ml && ml.p50 && ml.p50.length) {
+        const m10 = interpSeriesData(ml.p10 || [], allLabels, 'date', 'value');
+        const m50 = interpSeriesData(ml.p50,       allLabels, 'date', 'value');
+        const m90 = interpSeriesData(ml.p90 || [], allLabels, 'date', 'value');
+        bc.data.datasets.push({
+          label: snapLabel + ' · ML P90', data: m90,
+          borderColor: hexToRgba(color, 0.4), borderWidth: 1, borderDash: [1, 3],
+          backgroundColor: hexToRgba(color, 0.08), fill: '+2', tension: 0.1, pointRadius: 0, spanGaps: false, _snapOverlay: true,
+        });
+        bc.data.datasets.push({
+          label: snapLabel + ' · ML trend', data: m50,
+          borderColor: hexToRgba(color, 0.75), borderWidth: 1.5, borderDash: [1, 2],
+          backgroundColor: 'transparent', fill: false, tension: 0.1, pointRadius: 0, spanGaps: false, _snapOverlay: true,
+        });
+        bc.data.datasets.push({
+          label: snapLabel + ' · ML P10', data: m10,
+          borderColor: hexToRgba(color, 0.4), borderWidth: 1, borderDash: [1, 3],
+          backgroundColor: 'transparent', fill: false, tension: 0.1, pointRadius: 0, spanGaps: false, _snapOverlay: true,
+        });
+      }
     } else {
       const data     = allLabels.map(l => snapRemainingAt(h, l));
       const firstIdx = data.findIndex(v => v !== null);
@@ -323,6 +345,13 @@ function quickSelectNone() { clearComparison(); }
 window.showSnapMc = false;
 function toggleSnapMc(on) {
   window.showSnapMc = !!on;
+  [...selectedSnaps.values()].forEach(h => fetchSnapSeries(h));
+  updateBurndownOverlays();
+}
+
+window.showSnapMl = false;
+function toggleSnapMl(on) {
+  window.showSnapMl = !!on;
   [...selectedSnaps.values()].forEach(h => fetchSnapSeries(h));
   updateBurndownOverlays();
 }
