@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}Setup - Credit Usage Explorer{% endblock %}
+
+{% block body %}
+  <div class="container py-4" style="max-width: 760px;">
+
+    <div class="mb-4 text-center">
+      <h1 class="page-title">Welcome &mdash; let's get set up</h1>
+      <p class="page-subtitle">
+        Two quick steps: tell us about your contract, then upload your usage data.
+        You can skip and configure later if you prefer.
+      </p>
+    </div>
+
+    {# ── Step 1: Contract ── #}
+    <div class="dash-section">
+      <div class="dash-section-header">
+        <span class="dash-section-title">
+          <span class="setup-step {% if has_config %}done{% endif %}">1</span> Configure your contract
+        </span>
+        {% if has_config %}<span class="badge bg-success">&#10003; done</span>{% endif %}
+      </div>
+      <div class="dash-section-body">
+        <form method="post" action="{{ url_for('main.setup_save_config') }}">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label">Contract start</label>
+              <input class="form-control form-control-sm" type="date" name="contract_start_date"
+                     value="{{ contract.contract_start_date or '' }}" required>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Contract end</label>
+              <input class="form-control form-control-sm" type="date" name="contract_end_date"
+                     value="{{ contract.contract_end_date or '' }}" required>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Purchased credits</label>
+              <input class="form-control form-control-sm" type="number" name="purchased_credits"
+                     value="{{ contract.purchased_credits or '' }}" min="0" step="1" required>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Price per credit ($)</label>
+              <input class="form-control form-control-sm" type="number" name="current_price_per_credit"
+                     value="{{ pricing.current_price_per_credit or '' }}" min="0" step="0.0001">
+            </div>
+            <div class="col-12">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="rollover_allowed" id="rollover_allowed"
+                       {% if contract.rollover_allowed %}checked{% endif %}>
+                <label class="form-check-label" for="rollover_allowed">Unused credits roll over</label>
+              </div>
+            </div>
+          </div>
+          <button class="btn btn-primary btn-sm mt-3" type="submit">Save contract</button>
+        </form>
+      </div>
+    </div>
+
+    {# ── Step 2: Data ── #}
+    <div class="dash-section">
+      <div class="dash-section-header">
+        <span class="dash-section-title">
+          <span class="setup-step {% if has_data %}done{% endif %}">2</span> Upload your usage data
+        </span>
+        {% if has_data %}<span class="badge bg-success">&#10003; {{ '{:,}'.format(total_records) }} records</span>{% endif %}
+      </div>
+      <div class="dash-section-body">
+        <p class="text-muted small mb-3">
+          Upload one or more usage sheets (<code>.xlsx</code>, <code>.xls</code>, or <code>.csv</code>).
+          Multiple sheets merge automatically &mdash; overlapping days are de-duplicated.
+          {% if has_data %}<br>Currently loaded: <strong>{{ data_filename }}</strong>.{% endif %}
+        </p>
+        <form method="post" action="{{ url_for('main.upload_data') }}" enctype="multipart/form-data">
+          <div class="d-flex gap-2 align-items-center flex-wrap">
+            <input class="form-control form-control-sm" type="file" name="file" accept=".xlsx,.xls,.csv" multiple required style="max-width:360px;">
+            <button class="btn btn-primary btn-sm" type="submit">Upload</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div class="d-flex justify-content-between align-items-center mt-4">
+      <a href="{{ url_for('main.setup_skip') }}" class="text-muted small">Skip for now &mdash; I'll configure later</a>
+      <a href="{{ url_for('main.setup_finish') }}"
+         class="btn {% if has_config and has_data %}btn-success{% else %}btn-outline-secondary{% endif %} btn-sm">
+        Go to dashboard &rarr;
+      </a>
+    </div>
+
+    <p class="text-muted mt-4" style="font-size:.74rem;">
+      Prefer to set things up by hand? Drop a <code>contract_config.yaml</code> into the
+      <code>config/</code> folder and your sheet into <code>data/</code>, then skip this wizard.
+    </p>
+
+  </div>
+{% endblock %}

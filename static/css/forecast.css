@@ -1,0 +1,78 @@
+/* Forecast page styles (moved out of the template's inline <style>). */
+
+.label-empty { color: #adb5bd; font-style: italic; }
+
+.kpi-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: .75rem;
+  margin-bottom: 1.25rem;
+}
+.kpi-card {
+  background: #fff;
+  border: 1px solid #e3e6ea;
+  border-radius: 10px;
+  padding: .75rem 1rem;
+}
+.kpi-label {
+  font-size: .68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: #8a92a0;
+  margin-bottom: .2rem;
+}
+.kpi-value {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #1a1d23;
+  line-height: 1.2;
+}
+.kpi-sub {
+  font-size: .72rem;
+  color: #8a92a0;
+  margin-top: .1rem;
+}
+
+.section-label {
+  font-size: .7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .09em;
+  color: #8a92a0;
+  margin-bottom: .6rem;
+}
+
+/* Compact, fixed-layout snapshot table — never scrolls horizontally */
+.snap-table { width: 100%; table-layout: fixed; border-collapse: collapse; }
+.snap-table thead th {
+  font-size: .64rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .04em; color: #8a92a0; text-align: left;
+  padding: .4rem .5rem; border-bottom: 1px solid #e3e6ea; white-space: nowrap;
+}
+.snap-table thead th.text-end { text-align: right; }
+.snap-table tbody tr { border-bottom: 1px solid #f0f2f5; }
+.snap-table tbody tr:hover { background: #f8f9fb; }
+.snap-table tbody td { padding: .5rem .5rem; vertical-align: middle; color: #2c3140; }
+.snap-table td.num { font-size: .8rem; font-variant-numeric: tabular-nums; }
+.snap-table td.cell-select { text-align: center; white-space: nowrap; }
+.snap-table td.cell-select .history-cb { display: block; margin: 0 auto .25rem; cursor: pointer; }
+.snap-table td.cell-select .snap-color-input {
+  width: 18px; height: 18px; padding: 0; border: 1px solid #dee2e6;
+  border-radius: 3px; cursor: pointer; display: block; margin: 0 auto;
+}
+.snap-table .snap-date { font-size: .8rem; font-weight: 600; color: #1a1d23; line-height: 1.2; }
+.snap-table .snapshot-label-cell { overflow: hidden; }
+.snap-table .label-display {
+  font-size: .74rem; color: #6c757d; flex: 1; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: text;
+}
+.snap-table .label-edit-btn { font-size: .68rem; line-height: 1; flex-shrink: 0; }
+.snap-table .pacing-pill { font-size: .63rem; padding: .08rem .4rem; }
+.snap-table .sub-note { font-size: .64rem; color: #adb5bd; line-height: 1.1; }
+.snap-table td.cell-actions { white-space: nowrap; }
+.snap-table td.cell-actions a, .snap-table td.cell-actions button { font-size: .82rem; }
+
+/* Snapshot header toolbar — one place for button sizing */
+.snap-toolbar form { margin: 0; display: inline-block; }
+.snap-toolbar .btn { font-size: .72rem; padding: .1rem .5rem; }

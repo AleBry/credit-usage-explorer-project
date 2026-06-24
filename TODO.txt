@@ -1,15 +1,6 @@
-Priority:
-- CSS files <Style> on each template condensed, one or multiple .css sheets
-- outlier more filters
-- remove or optimize snapshot comparison graphing (smaller)
-- SETUP WIZARD:
-    If there is no data folder or config folder,
-     have a page that feeds you thru process of setting up 
-     your config and uploading your data
-      (skip if you want, manual move of config)
-
 Fine tuning:
 - generate ML snapshots too
 - Condensed GUI for forecasting
 - condensed GUI for records pages, outliers, users, etc
 (multiple views: cards, lists, etc)
+- combining user search with outlier search, making two separate modes (basic search, advanced searching) / (user card lists, "record" listing)

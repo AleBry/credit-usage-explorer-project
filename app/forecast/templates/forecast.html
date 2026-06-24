@@ -7,86 +7,7 @@
     <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
     <script src="{{ url_for('static', filename='js/charts.js') }}"></script>
-    <style>
-      .label-empty { color: #adb5bd; font-style: italic; }
-
-      .kpi-strip {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-        gap: .75rem;
-        margin-bottom: 1.25rem;
-      }
-      .kpi-card {
-        background: #fff;
-        border: 1px solid #e3e6ea;
-        border-radius: 10px;
-        padding: .75rem 1rem;
-      }
-      .kpi-label {
-        font-size: .68rem;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: .06em;
-        color: #8a92a0;
-        margin-bottom: .2rem;
-      }
-      .kpi-value {
-        font-size: 1.15rem;
-        font-weight: 700;
-        color: #1a1d23;
-        line-height: 1.2;
-      }
-      .kpi-sub {
-        font-size: .72rem;
-        color: #8a92a0;
-        margin-top: .1rem;
-      }
-
-      .section-label {
-        font-size: .7rem;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: .09em;
-        color: #8a92a0;
-        margin-bottom: .6rem;
-      }
-
-      /* chart-card / chart-toolbar styles are now global (bnl.css) */
-
-      /* Compact, fixed-layout snapshot table — never scrolls horizontally */
-      .snap-table { width: 100%; table-layout: fixed; border-collapse: collapse; }
-      .snap-table thead th {
-        font-size: .64rem; font-weight: 700; text-transform: uppercase;
-        letter-spacing: .04em; color: #8a92a0; text-align: left;
-        padding: .4rem .5rem; border-bottom: 1px solid #e3e6ea; white-space: nowrap;
-      }
-      .snap-table thead th.text-end { text-align: right; }
-      .snap-table tbody tr { border-bottom: 1px solid #f0f2f5; }
-      .snap-table tbody tr:hover { background: #f8f9fb; }
-      .snap-table tbody td { padding: .5rem .5rem; vertical-align: middle; color: #2c3140; }
-      .snap-table td.num { font-size: .8rem; font-variant-numeric: tabular-nums; }
-      .snap-table td.cell-select { text-align: center; white-space: nowrap; }
-      .snap-table td.cell-select .history-cb { display: block; margin: 0 auto .25rem; cursor: pointer; }
-      .snap-table td.cell-select .snap-color-input {
-        width: 18px; height: 18px; padding: 0; border: 1px solid #dee2e6;
-        border-radius: 3px; cursor: pointer; display: block; margin: 0 auto;
-      }
-      .snap-table .snap-date { font-size: .8rem; font-weight: 600; color: #1a1d23; line-height: 1.2; }
-      .snap-table .snapshot-label-cell { overflow: hidden; }
-      .snap-table .label-display {
-        font-size: .74rem; color: #6c757d; flex: 1; min-width: 0;
-        overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: text;
-      }
-      .snap-table .label-edit-btn { font-size: .68rem; line-height: 1; flex-shrink: 0; }
-      .snap-table .pacing-pill { font-size: .63rem; padding: .08rem .4rem; }
-      .snap-table .sub-note { font-size: .64rem; color: #adb5bd; line-height: 1.1; }
-      .snap-table td.cell-actions { white-space: nowrap; }
-      .snap-table td.cell-actions a, .snap-table td.cell-actions button { font-size: .82rem; }
-
-      /* Snapshot header toolbar — one place for button sizing, no repeated inline styles */
-      .snap-toolbar form { margin: 0; display: inline-block; }
-      .snap-toolbar .btn { font-size: .72rem; padding: .1rem .5rem; }
-    </style>
+    <link href="{{ url_for('static', filename='css/forecast.css') }}" rel="stylesheet">
 {% endblock %}
 
 {% block body %}
@@ -638,12 +559,18 @@
     <div id="compare-panel" style="display:none; padding:.5rem 0 0;">
       <div class="d-flex justify-content-between align-items-center mb-2">
         <span style="font-size:.78rem; font-weight:700; color:#1a1d23;">Comparing <span id="compare-count">0</span> snapshots</span>
-        <button class="btn btn-outline-secondary btn-sm py-0" onclick="clearComparison()">Clear</button>
+        <span class="d-flex align-items-center gap-2">
+          <label class="d-flex align-items-center gap-1 mb-0" style="font-size:.72rem; cursor:pointer; color:#6c757d;"
+                 title="Show a bar chart comparing the selected snapshots">
+            <input type="checkbox" id="compare-chart-toggle" onchange="toggleCompareChart(this.checked)"> Chart
+          </label>
+          <button class="btn btn-outline-secondary btn-sm py-0" onclick="clearComparison()">Clear</button>
+        </span>
       </div>
       <div id="compare-grid" class="row g-2 mb-3"></div>
       <div id="compare-chart-wrap" style="display:none;">
         <div style="font-size:.65rem; font-weight:700; color:#8a92a0; letter-spacing:.06em; margin-bottom:.5rem;">SNAPSHOT COMPARISON</div>
-        <canvas id="compare-chart" height="240"></canvas>
+        <div style="position:relative; height:170px;"><canvas id="compare-chart"></canvas></div>
       </div>
     </div>
 

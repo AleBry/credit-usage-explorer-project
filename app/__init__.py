@@ -38,8 +38,10 @@ def create_app() -> Flask:
     )
     app.secret_key = "bnl-dev-secret"
 
-    HISTORICAL_DIR.mkdir(parents=True, exist_ok=True)
-    UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+    # Ensure required folders exist (they may be missing on a fresh install
+    # or after the user clears config/data while testing the setup wizard).
+    for _d in (CONFIG_DIR, PROCESSED_DIR, HISTORICAL_DIR, UPLOADS_DIR, CURRENT_DATA_PATH.parent):
+        _d.mkdir(parents=True, exist_ok=True)
 
     initial_path = DEFAULT_DATA_PATH
     if CURRENT_DATA_PATH_CACHE.exists():
@@ -69,5 +71,24 @@ def create_app() -> Flask:
             return {"nav_alerts": compute_alerts(store, pipeline, config_svc)}
         except Exception:
             return {"nav_alerts": []}
+
+    # First-run guard: with no contract config yet, steer to the setup wizard
+    # (unless the user skipped it). Static + setup/upload endpoints are exempt.
+    _SETUP_EXEMPT = {
+        "main.setup_page", "main.setup_save_config", "main.setup_skip",
+        "main.setup_finish", "main.upload_data",
+    }
+
+    @app.before_request
+    def _require_setup():
+        from flask import redirect, request, session, url_for
+        endpoint = request.endpoint or ""
+        if endpoint.startswith("static") or endpoint in _SETUP_EXEMPT:
+            return None
+        if session.get("setup_skipped"):
+            return None
+        if not config_svc.contract_exists():
+            return redirect(url_for("main.setup_page"))
+        return None
 
     return app

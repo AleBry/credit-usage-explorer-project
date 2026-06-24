@@ -3,6 +3,50 @@ UPDATES LOG
 ================================================================
 
 ----------------------------------------------------------------
+2026-06-24 (fix: upload with missing config dir)
+----------------------------------------------------------------
+
+- Bug: after deleting the config/ folder (e.g. while testing the wizard),
+  uploading data failed with "Error saving merged data: ... config/
+  data_path.txt (No such file or directory)" because the cache pointer
+  couldn't be written into the missing folder.
+- Fix: create_app now ensures CONFIG_DIR, PROCESSED_DIR, HISTORICAL_DIR,
+  UPLOADS_DIR and the data dir exist on startup; the upload route also
+  mkdir's the cache parent before writing. Verified by reproducing the
+  missing-config-dir case — upload now succeeds and recreates the folder.
+
+----------------------------------------------------------------
+2026-06-23 (CSS condense + snapshot graph + setup wizard)
+----------------------------------------------------------------
+
+CSS CONDENSED
+- Moved forecast.html's inline <style> block into static/css/forecast.css
+  (loaded only on the forecast page). No template has a <style> block now.
+
+SNAPSHOT COMPARISON GRAPH (smaller + optional)
+- The comparison bar chart is off by default (the cards already show the
+  data) and toggled by a "Chart" checkbox; height capped at 170px.
+
+SETUP WIZARD (first-run)
+- Config service is now robust to a missing contract_config.yaml (returns a
+  default skeleton, never crashes); new contract_exists / is_contract_configured.
+- New /setup wizard: Step 1 configure contract (dates, purchased credits,
+  price), Step 2 upload data. Shows per-step done badges. Skippable.
+- A before_request guard redirects all pages to /setup on a fresh install
+  (no contract config) until you configure or skip; static + setup + upload
+  endpoints are exempt. A "Setup wizard" link was added to Settings.
+
+----------------------------------------------------------------
+2026-06-23 (alert rule scoping)
+----------------------------------------------------------------
+
+- Alert rules can now be scoped by Usage type (all / codex / chat / ...)
+  and Model. evaluate_rules applies the scope before counting; the alert
+  detail states it ("...on codex") and the click-through deep-links the
+  outlier view pre-filtered to that type/model. Rule rows show the scope
+  as badges. New rule fields: usage_type, model (default = all).
+
+----------------------------------------------------------------
 2026-06-23 (outliers declutter + trigger-driven views)
 ----------------------------------------------------------------
 

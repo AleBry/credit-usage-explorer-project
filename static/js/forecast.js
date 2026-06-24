@@ -163,9 +163,21 @@ function forecastAccuracyHtml(h) {
   </div>`;
 }
 
+// Comparison bar chart is off by default (the cards already show the data);
+// the "Chart" checkbox in the compare panel turns it on.
+let showCompareChart = false;
+function toggleCompareChart(on) {
+  showCompareChart = !!on;
+  updateCompareChart([...selectedSnaps.values()]);
+}
+
 function updateCompareChart(snaps) {
   const wrap = document.getElementById('compare-chart-wrap');
-  if (snaps.length < 2) { wrap.style.display = 'none'; if (compareChart) { compareChart.destroy(); compareChart = null; } return; }
+  if (!showCompareChart || snaps.length < 2) {
+    if (wrap) wrap.style.display = 'none';
+    if (compareChart) { compareChart.destroy(); compareChart = null; }
+    return;
+  }
   wrap.style.display = '';
   const labels   = snaps.map(h => h.label ? truncLabel(h.label) : h.snapshot_date);
   const burnData = snaps.map(h => parseFloat(h.forecast_weekly_burn || 0));
@@ -180,7 +192,7 @@ function updateCompareChart(snaps) {
   compareChart = new Chart(document.getElementById('compare-chart'), {
     type: 'bar', data: { labels, datasets },
     options: {
-      responsive: true,
+      responsive: true, maintainAspectRatio: false,
       plugins: {
         legend: { display: true, position: 'top', labels: { font: { size: 11 }, boxWidth: 12 } },
         tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: ${Math.round(ctx.raw ?? 0).toLocaleString()}` } },

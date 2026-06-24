@@ -58,6 +58,15 @@ body { background: #f8f9fb; }
 .alert-item.read .alert-unread-dot { display: none; }
 .rule-row-off { opacity: .55; }
 .lb-table td.cell-muted { font-size: .75rem; color: #8a92a0; }
+
+/* ── Setup wizard step badges ── */
+.setup-step {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px; border-radius: 50%;
+  background: #e3e6ea; color: #6c757d; font-size: .8rem; font-weight: 700;
+  margin-right: .4rem;
+}
+.setup-step.done { background: #198754; color: #fff; }
 .app-nav-links {
   flex: 1 1 auto;
   min-width: 0;
