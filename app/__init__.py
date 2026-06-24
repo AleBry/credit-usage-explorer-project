@@ -7,6 +7,7 @@ from flask import Flask
 from .shared.config_service import AppConfig
 from .shared.data_store import DataStore
 from .shared.ingestion import IngestionPipeline
+from .shared.services import Services
 from .dashboard.routes import create_dashboard_blueprint
 from .analytics.routes import create_analytics_blueprint
 from .forecast.routes import create_forecast_blueprint
@@ -57,18 +58,19 @@ def create_app() -> Flask:
     store = DataStore(initial_path)
     pipeline = IngestionPipeline(PROCESSED_DIR)
     config_svc = AppConfig(CONFIG_DIR)
+    services = Services(store, pipeline, config_svc)
 
-    app.register_blueprint(create_dashboard_blueprint(store, pipeline, config_svc))
-    app.register_blueprint(create_analytics_blueprint(store, pipeline, config_svc))
-    app.register_blueprint(create_forecast_blueprint(pipeline, config_svc, store))
-    app.register_blueprint(create_settings_blueprint(pipeline, config_svc, store))
+    app.register_blueprint(create_dashboard_blueprint(services))
+    app.register_blueprint(create_analytics_blueprint(services))
+    app.register_blueprint(create_forecast_blueprint(services))
+    app.register_blueprint(create_settings_blueprint(services))
     app.jinja_env.filters["fmt_status"] = _fmt_status
 
     @app.context_processor
     def inject_nav_alerts() -> dict:
         from .shared.alerts import compute_alerts
         try:
-            return {"nav_alerts": compute_alerts(store, pipeline, config_svc)}
+            return {"nav_alerts": compute_alerts(services)}
         except Exception:
             return {"nav_alerts": []}
 

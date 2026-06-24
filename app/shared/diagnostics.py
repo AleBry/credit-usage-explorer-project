@@ -161,12 +161,7 @@ class ForecastCheck(Check):
 
     def run(self, ctx):
         try:
-            from app.forecast.service import ForecastingService
-            cfg = ctx.config_svc.load_contract()
-            hist = ctx.pipeline.get_historical_weekly_summary()
-            op = ctx.pipeline.get_operational_weekly_summary()
-            daily = ctx.store.data.df if (hist is None and op is None) else None
-            svc = ForecastingService(cfg, hist, op, daily)
+            svc = ctx.services.build_forecasting_service()
             if not svc.has_data():
                 return DiagnosticResult(self.name, "warn", "No data to forecast yet.")
             cs = svc.get_contract_status()
@@ -189,7 +184,7 @@ class AlertsCheck(Check):
     def run(self, ctx):
         try:
             from .alerts import compute_alerts
-            alerts = compute_alerts(ctx.store, ctx.pipeline, ctx.config_svc)
+            alerts = compute_alerts(ctx.services)
         except Exception as exc:
             return DiagnosticResult(self.name, "error", f"Alert evaluation failed: {exc}")
         by_level = {}
@@ -211,10 +206,11 @@ class Diagnostics:
         PipelineCheck, ForecastCheck, AlertsCheck,
     ]
 
-    def __init__(self, store, pipeline, config_svc):
-        self.store = store
-        self.pipeline = pipeline
-        self.config_svc = config_svc
+    def __init__(self, services):
+        self.services = services
+        self.store = services.store
+        self.pipeline = services.pipeline
+        self.config_svc = services.config_svc
 
     def run_all(self) -> dict[str, Any]:
         results: list[DiagnosticResult] = []

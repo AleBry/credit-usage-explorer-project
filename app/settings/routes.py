@@ -7,20 +7,17 @@ from pathlib import Path
 from flask import Blueprint, flash, redirect, render_template, request, send_file, url_for
 from werkzeug.utils import secure_filename
 
-from app.shared.config_service import AppConfig
-from app.shared.data_store import DataStore
-from app.shared.ingestion import IngestionPipeline, _infer_week_from_filename
+from app.shared.ingestion import _infer_week_from_filename
 from .service import force_rmtree, try_snapshot
 
 ALLOWED_HISTORICAL = {".xlsx", ".xls", ".csv"}
 ALLOWED_WEEKLY = {".csv"}
 
 
-def create_settings_blueprint(
-    pipeline: IngestionPipeline,
-    config_svc: AppConfig,
-    store: DataStore | None = None,
-) -> Blueprint:
+def create_settings_blueprint(services) -> Blueprint:
+    pipeline = services.pipeline
+    config_svc = services.config_svc
+    store = services.store
     bp = Blueprint("settings", __name__, template_folder="templates", url_prefix="/settings")
 
     @bp.route("", methods=["GET"])

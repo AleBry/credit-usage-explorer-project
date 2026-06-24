@@ -7,19 +7,15 @@ import pandas as _pd
 from flask import Blueprint, flash, jsonify, redirect, render_template, request, url_for
 
 from app.shared.chart_data import usage_type_weekly_json
-from app.shared.config_service import AppConfig
-from app.shared.data_store import DataStore
-from app.shared.ingestion import IngestionPipeline
 from .models import PriceModel
 from .prediction import ForecastContext, get_model
 from .service import ChartDataBuilder, ForecastingService
 
 
-def create_forecast_blueprint(
-    pipeline: IngestionPipeline,
-    config_svc: AppConfig,
-    store: DataStore | None = None,
-) -> Blueprint:
+def create_forecast_blueprint(services) -> Blueprint:
+    pipeline = services.pipeline
+    config_svc = services.config_svc
+    store = services.store
     bp = Blueprint("forecast", __name__, template_folder="templates", url_prefix="")
 
     def _get_store_df():

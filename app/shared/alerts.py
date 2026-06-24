@@ -104,11 +104,12 @@ def evaluate_rules(df, rules: list[dict]) -> list[dict]:
     return out
 
 
-def compute_alerts(store, pipeline, config_svc) -> list[dict]:
+def compute_alerts(services) -> list[dict]:
     alerts: list[dict] = []
+    config_svc = services.config_svc
 
     try:
-        df = store.data.df
+        df = services.store.data.df
     except Exception:
         df = None
 
@@ -142,11 +143,7 @@ def compute_alerts(store, pipeline, config_svc) -> list[dict]:
 
     # 3. Forecast pacing / exhaustion (deterministic only — cheap, no Monte Carlo)
     try:
-        from app.forecast.service import ForecastingService
-        hist_df = pipeline.get_historical_weekly_summary()
-        op_df = pipeline.get_operational_weekly_summary()
-        daily_fallback = df if (hist_df is None and op_df is None) else None
-        svc = ForecastingService(cfg, hist_df, op_df, daily_fallback)
+        svc = services.build_forecasting_service(cfg)
         if svc.has_data():
             cs = svc.get_contract_status()
             fc = svc.get_forecast()

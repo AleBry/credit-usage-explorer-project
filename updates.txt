@@ -3,6 +3,58 @@ UPDATES LOG
 ================================================================
 
 ----------------------------------------------------------------
+2026-06-24 (Typed forecast objects: ContractStatus / Forecast)
+----------------------------------------------------------------
+
+- get_contract_status() and get_forecast() now return typed dataclasses
+  (ContractStatus, Forecast) instead of bare dicts, giving attribute access
+  + IDE autocomplete + a single declared schema for every field.
+- They subclass collections.abc.Mapping, so 100% backward compatible: every
+  existing cs["x"], cs.get(...), {**cs, **fc}, .items(), pd.DataFrame([cs])
+  and Jinja cs.x keeps working unchanged. Verified the snapshot CSVs serialize
+  with byte-identical columns (22 + 19) and all pages + diagnostics stay green.
+
+----------------------------------------------------------------
+2026-06-24 (OOP refactor: Leaderboards)
+----------------------------------------------------------------
+
+- Moved the Tiers-page leaderboard aggregations (~80 lines of inline pandas
+  for users / by-type / models / usage-types / biggest-single / daily /
+  weekly / monthly / yearly) out of the route into a cohesive Leaderboards
+  class in app/analytics/service.py. The route now reads as nine named
+  method calls. Behaviour preserved (verified parity + all pages render).
+
+----------------------------------------------------------------
+2026-06-24 (OOP refactor: Services container)
+----------------------------------------------------------------
+
+- New app/shared/services.py: a Services container that bundles the shared
+  singletons (store, pipeline, config_svc) and a build_forecasting_service()
+  factory. All four blueprint factories now take a single `services` arg
+  (was three args in inconsistent orders) and unpack what they need at the
+  top — the rest of each route is unchanged.
+- Centralized the ForecastingService construction that was copy-pasted in
+  ~5 places (summary, upload auto-snapshot, alerts, diagnostics) into
+  Services.build_forecasting_service(); future call sites just ask the
+  container.
+- compute_alerts(services) and Diagnostics(services) now take the container
+  too. Removed the imports that were only type hints. (The diagnostics tool
+  caught a stale-signature call during the refactor — working as intended.)
+- All pages + diagnostics verified green.
+
+----------------------------------------------------------------
+2026-06-24 (CSS condensed to one app.css)
+----------------------------------------------------------------
+
+- Merged bnl.css + forecast.css into a single static/css/app.css and
+  condensed: 819 lines across two files -> 562 in one. Introduced :root
+  CSS variables (--surface/--bg/--border/--border-soft/--muted/--ink/
+  --accent/--radius), a shared card-surface group and a shared uppercase
+  label group (instead of repeating the same declarations ~12x), and
+  organized into clear sections. Updated template references; removed the
+  old files. All pages verified rendering.
+
+----------------------------------------------------------------
 2026-06-24 (CSS consolidation + OOP diagnostics)
 ----------------------------------------------------------------
 

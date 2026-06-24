@@ -1,4 +1,5 @@
 Fine tuning:
+- tiers list doesnt need drop down for charts as the filters already change it
 - generate ML snapshots too
 - Condensed GUI for forecasting
 - condensed GUI for records pages, outliers, users, etc

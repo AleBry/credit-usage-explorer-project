@@ -1,11 +1,89 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
+from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
 import pandas as pd
+
+
+class _StatusMapping(Mapping):
+    """Read these dataclasses like the plain dicts they replaced.
+
+    Every existing call site keeps working unchanged — ``cs["x"]``,
+    ``cs.get(...)``, ``{**cs, **fc}``, ``.items()``, ``pd.DataFrame([cs])`` and
+    Jinja's ``cs.x`` — while new code gets attribute access and IDE autocomplete
+    from the typed fields. Field order is preserved, so the snapshot CSV columns
+    are byte-for-byte identical.
+    """
+
+    def __getitem__(self, key: str) -> Any:
+        try:
+            return getattr(self, key)
+        except AttributeError as exc:
+            raise KeyError(key) from exc
+
+    def __iter__(self):
+        return iter(self.__dataclass_fields__)
+
+    def __len__(self) -> int:
+        return len(self.__dataclass_fields__)
+
+
+@dataclass
+class ContractStatus(_StatusMapping):
+    """Where the contract stands right now (credits, pacing, dates)."""
+
+    contract_start_date: Any
+    contract_end_date: Any
+    latest_usage_date: Any
+    purchased_credits: float
+    historical_credits_used: float
+    operational_credits_used: float
+    total_credits_used: float
+    credits_remaining: float
+    rollover_allowed: bool
+    price_per_credit: float
+    projected_cost_used: float
+    projected_value_remaining: float
+    total_contract_days: int
+    elapsed_days: int
+    remaining_days: int
+    weeks_remaining: float
+    percent_contract_elapsed: float
+    percent_credits_used: float
+    burn_pace_ratio: float
+    latest_weekly_burn: float
+    required_weekly_burn_to_use_all: float
+    pacing_status: str
+
+
+@dataclass
+class Forecast(_StatusMapping):
+    """Projected burn and end-of-contract outlook."""
+
+    operational_weeks: int
+    historical_avg_burn: float
+    latest_week_burn: float
+    recent_average_burn: float
+    historical_weight_used: float
+    latest_week_weight_used: float
+    recent_average_weight_used: float
+    forecast_weekly_burn: float
+    forecast_monthly_burn: float
+    credits_remaining: float
+    weeks_remaining: float
+    weeks_until_exhaustion: float
+    forecast_exhaustion_date: Any
+    contract_end_date: Any
+    forecast_future_usage_to_contract_end: float
+    forecast_contract_end_balance: float
+    forecast_total_contract_usage: float
+    forecast_percent_credits_used_by_contract_end: float
+    forecast_status: str
 
 
 class ForecastingService:
@@ -85,7 +163,7 @@ class ForecastingService:
         op_ok = self.operational_df is not None and not self.operational_df.empty
         return hist_ok or op_ok
 
-    def get_contract_status(self) -> dict[str, Any]:
+    def get_contract_status(self) -> ContractStatus:
         contract = self.config["contract"]
         pricing = self.config["pricing"]
 
@@ -151,32 +229,32 @@ class ForecastingService:
         else:
             pacing_status = "OVERBURNING"
 
-        return {
-            "contract_start_date": contract_start.date(),
-            "contract_end_date": contract_end.date(),
-            "latest_usage_date": latest_usage_date.date(),
-            "purchased_credits": purchased_credits,
-            "historical_credits_used": historical_credits_used,
-            "operational_credits_used": operational_credits_used,
-            "total_credits_used": total_credits_used,
-            "credits_remaining": credits_remaining,
-            "rollover_allowed": rollover_allowed,
-            "price_per_credit": price_per_credit,
-            "projected_cost_used": total_credits_used * price_per_credit,
-            "projected_value_remaining": credits_remaining * price_per_credit,
-            "total_contract_days": total_contract_days,
-            "elapsed_days": elapsed_days,
-            "remaining_days": remaining_days,
-            "weeks_remaining": weeks_remaining,
-            "percent_contract_elapsed": pct_elapsed,
-            "percent_credits_used": pct_used,
-            "burn_pace_ratio": burn_pace_ratio,
-            "latest_weekly_burn": latest_weekly_burn,
-            "required_weekly_burn_to_use_all": required_weekly_burn,
-            "pacing_status": pacing_status,
-        }
+        return ContractStatus(
+            contract_start_date=contract_start.date(),
+            contract_end_date=contract_end.date(),
+            latest_usage_date=latest_usage_date.date(),
+            purchased_credits=purchased_credits,
+            historical_credits_used=historical_credits_used,
+            operational_credits_used=operational_credits_used,
+            total_credits_used=total_credits_used,
+            credits_remaining=credits_remaining,
+            rollover_allowed=rollover_allowed,
+            price_per_credit=price_per_credit,
+            projected_cost_used=total_credits_used * price_per_credit,
+            projected_value_remaining=credits_remaining * price_per_credit,
+            total_contract_days=total_contract_days,
+            elapsed_days=elapsed_days,
+            remaining_days=remaining_days,
+            weeks_remaining=weeks_remaining,
+            percent_contract_elapsed=pct_elapsed,
+            percent_credits_used=pct_used,
+            burn_pace_ratio=burn_pace_ratio,
+            latest_weekly_burn=latest_weekly_burn,
+            required_weekly_burn_to_use_all=required_weekly_burn,
+            pacing_status=pacing_status,
+        )
 
-    def get_forecast(self) -> dict[str, Any]:
+    def get_forecast(self) -> Forecast:
         fc_cfg = self.config["forecast"]
 
         if self.historical_df is not None and not self.historical_df.empty:
@@ -262,27 +340,27 @@ class ForecastingService:
         else:
             forecast_status = "HIGH_UNDERUSE"
 
-        return {
-            "operational_weeks": op_count,
-            "historical_avg_burn": historical_avg_burn,
-            "latest_week_burn": latest_week_burn,
-            "recent_average_burn": recent_avg_burn,
-            "historical_weight_used": weights.get("historical_weight", 0),
-            "latest_week_weight_used": weights.get("latest_week_weight", 0),
-            "recent_average_weight_used": weights.get("recent_average_weight", 0),
-            "forecast_weekly_burn": forecast_weekly,
-            "forecast_monthly_burn": forecast_monthly,
-            "credits_remaining": credits_remaining,
-            "weeks_remaining": weeks_remaining,
-            "weeks_until_exhaustion": weeks_until_exhaustion,
-            "forecast_exhaustion_date": exhaustion_date,
-            "contract_end_date": pd.to_datetime(cs["contract_end_date"]).date(),
-            "forecast_future_usage_to_contract_end": future_usage,
-            "forecast_contract_end_balance": end_balance,
-            "forecast_total_contract_usage": total_at_end,
-            "forecast_percent_credits_used_by_contract_end": pct_at_end,
-            "forecast_status": forecast_status,
-        }
+        return Forecast(
+            operational_weeks=op_count,
+            historical_avg_burn=historical_avg_burn,
+            latest_week_burn=latest_week_burn,
+            recent_average_burn=recent_avg_burn,
+            historical_weight_used=weights.get("historical_weight", 0),
+            latest_week_weight_used=weights.get("latest_week_weight", 0),
+            recent_average_weight_used=weights.get("recent_average_weight", 0),
+            forecast_weekly_burn=forecast_weekly,
+            forecast_monthly_burn=forecast_monthly,
+            credits_remaining=credits_remaining,
+            weeks_remaining=weeks_remaining,
+            weeks_until_exhaustion=weeks_until_exhaustion,
+            forecast_exhaustion_date=exhaustion_date,
+            contract_end_date=pd.to_datetime(cs["contract_end_date"]).date(),
+            forecast_future_usage_to_contract_end=future_usage,
+            forecast_contract_end_balance=end_balance,
+            forecast_total_contract_usage=total_at_end,
+            forecast_percent_credits_used_by_contract_end=pct_at_end,
+            forecast_status=forecast_status,
+        )
 
     _AUTOSAVE_MARKER = "_autosave_date.txt"
 

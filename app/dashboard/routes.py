@@ -9,11 +9,9 @@ from werkzeug.utils import secure_filename
 
 from app.shared.alerts import evaluate_rules
 from app.shared.chart_data import usage_type_weekly_json
-from app.shared.config_service import AppConfig
 from app.shared.data_merge import merge_usage_data
-from app.shared.data_store import CreditUsageData, DataStore
-from app.shared.ingestion import IngestionPipeline
-from app.forecast.service import ChartDataBuilder, ForecastingService
+from app.shared.data_store import CreditUsageData
+from app.forecast.service import ChartDataBuilder
 from .service import OUTLIER_VIEWS, compute_outliers, compute_summary_metrics, compute_weekly_trend
 
 DERIVED_COLS = {
@@ -22,11 +20,10 @@ DERIVED_COLS = {
 }
 
 
-def create_dashboard_blueprint(
-    store: DataStore,
-    pipeline: IngestionPipeline,
-    config_svc: AppConfig,
-) -> Blueprint:
+def create_dashboard_blueprint(services) -> Blueprint:
+    store = services.store
+    pipeline = services.pipeline
+    config_svc = services.config_svc
     bp = Blueprint("main", __name__, template_folder="templates")
 
     def data() -> CreditUsageData:
@@ -84,13 +81,13 @@ def create_dashboard_blueprint(
     @bp.route("/debug", methods=["GET"])
     def diagnostics_page() -> str:
         from app.shared.diagnostics import Diagnostics
-        report = Diagnostics(store, pipeline, config_svc).run_all()
+        report = Diagnostics(services).run_all()
         return render_template("diagnostics.html", report=report)
 
     @bp.route("/debug.json", methods=["GET"])
     def diagnostics_json() -> object:
         from app.shared.diagnostics import Diagnostics
-        report = Diagnostics(store, pipeline, config_svc).run_all()
+        report = Diagnostics(services).run_all()
         return jsonify({
             "overall": report["overall"],
             "total_ms": report["total_ms"],
@@ -112,10 +109,7 @@ def create_dashboard_blueprint(
         ps = pipeline.status()
         try:
             config = config_svc.load_contract()
-            hist_df = pipeline.get_historical_weekly_summary()
-            op_df = pipeline.get_operational_weekly_summary()
-            daily_fallback = d.df if (hist_df is None and op_df is None) else None
-            svc = ForecastingService(config, hist_df, op_df, daily_fallback)
+            svc = services.build_forecasting_service(config)
             if svc.has_data():
                 cs = svc.get_contract_status()
                 fc = svc.get_forecast()
@@ -364,10 +358,7 @@ def create_dashboard_blueprint(
             cfg = config_svc.load_contract()
             auto_save_mode = cfg.get("forecast", {}).get("snapshot_auto_save", "daily")
             if auto_save_mode in ("on_upload", "both"):
-                hist_df = pipeline.get_historical_weekly_summary()
-                op_df = pipeline.get_operational_weekly_summary()
-                daily_fallback = store.data.df if (hist_df is None and op_df is None) else None
-                svc = ForecastingService(cfg, hist_df, op_df, daily_fallback)
+                svc = services.build_forecasting_service(cfg)
                 if svc.has_data():
                     label = (f"Upload: {per_file[0]['filename']}" if len(files) == 1
                              else f"Upload: {len(files)} sheets")

@@ -7,17 +7,12 @@ import pandas as pd
 from flask import Blueprint, render_template, request
 
 from app.shared.chart_data import usage_type_weekly, usage_type_weekly_json
-from app.shared.config_service import AppConfig
-from app.shared.data_store import CreditUsageData, DataStore
-from app.shared.ingestion import IngestionPipeline
-from .service import aggregate_by_period, aggregate_by_period_fmt, aggregate_by_week, agg_credits
+from app.shared.data_store import CreditUsageData
+from .service import Leaderboards
 
 
-def create_analytics_blueprint(
-    store: DataStore,
-    pipeline: IngestionPipeline,
-    config_svc: AppConfig,
-) -> Blueprint:
+def create_analytics_blueprint(services) -> Blueprint:
+    store = services.store
     bp = Blueprint("analytics", __name__, template_folder="templates", url_prefix="")
 
     def data() -> CreditUsageData:
@@ -55,89 +50,16 @@ def create_analytics_blueprint(
             if "usage_type_model" in d.df.columns else []
         )
 
-        def with_tokens(frame: pd.DataFrame) -> pd.DataFrame:
-            frame = frame.copy()
-            frame["tokens_qty"] = (
-                frame["usage_quantity"].where(frame["usage_units"] == "tokens", 0.0)
-                if ("usage_units" in frame.columns and "usage_quantity" in frame.columns)
-                else 0.0
-            )
-            return frame
-
-        lb_users = []
-        group_cols = [c for c in ["name", "email"] if c in df.columns]
-        if group_cols:
-            dft = with_tokens(df)
-            agg = (
-                dft.groupby(group_cols)
-                .agg(
-                    rows=("usage_credits", "count"),
-                    total_credits=("usage_credits", "sum"),
-                    total_tokens=("tokens_qty", "sum"),
-                )
-                .reset_index()
-                .sort_values("total_credits", ascending=False)
-                .head(top_n)
-            )
-            lb_users = agg.to_dict(orient="records")
-
-        lb_users_by_type = []
-        type_group = [c for c in ["name", "email", "usage_type_parsed_type"] if c in df.columns]
-        if len(type_group) >= 2:
-            agg = (
-                df.groupby(type_group)
-                .agg(rows=("usage_credits", "count"), total_credits=("usage_credits", "sum"))
-                .reset_index()
-                .sort_values("total_credits", ascending=False)
-                .head(top_n)
-            )
-            lb_users_by_type = agg.to_dict(orient="records")
-
-        lb_models = []
-        if "usage_type_model" in df.columns:
-            agg_dict: dict = {"rows": ("usage_credits", "count"), "total_credits": ("usage_credits", "sum")}
-            if "email" in df.columns:
-                agg_dict["unique_users"] = ("email", "nunique")
-            agg = (
-                df.groupby("usage_type_model").agg(**agg_dict)
-                .reset_index().sort_values("total_credits", ascending=False).head(top_n)
-            )
-            if "unique_users" not in agg.columns:
-                agg["unique_users"] = 0
-            lb_models = agg.to_dict(orient="records")
-
-        lb_usage_types = []
-        if "usage_type_parsed_type" in df.columns:
-            agg_dict = {"rows": ("usage_credits", "count"), "total_credits": ("usage_credits", "sum")}
-            if "email" in df.columns:
-                agg_dict["unique_users"] = ("email", "nunique")
-            agg = (
-                df.groupby("usage_type_parsed_type").agg(**agg_dict)
-                .reset_index().sort_values("total_credits", ascending=False)
-            )
-            if "unique_users" not in agg.columns:
-                agg["unique_users"] = 0
-            lb_usage_types = agg.to_dict(orient="records")
-
-        lb_biggest_single = []
-        if "usage_credits" in df.columns:
-            single_cols = [
-                c for c in [
-                    "name", "email", "usage_credits", "usage_type_parsed_type",
-                    "usage_type_model", "usage_type_io", "usage_quantity",
-                    "usage_units", "date_partition", "usage_type",
-                ]
-                if c in df.columns
-            ]
-            lb_biggest_single = (
-                df[single_cols].sort_values("usage_credits", ascending=False).head(top_n)
-                .to_dict(orient="records")
-            )
-
-        lb_daily = aggregate_by_period(df, "date_partition", top_n)
-        lb_weekly = aggregate_by_week(df, top_n)
-        lb_monthly = aggregate_by_period_fmt(df, "M", "%Y-%m", "month", top_n)
-        lb_yearly = aggregate_by_period_fmt(df, "Y", "%Y", "year", top_n)
+        lb = Leaderboards(df, top_n)
+        lb_users = lb.by_user()
+        lb_users_by_type = lb.by_user_type()
+        lb_models = lb.by_model()
+        lb_usage_types = lb.by_usage_type()
+        lb_biggest_single = lb.biggest_single()
+        lb_daily = lb.daily()
+        lb_weekly = lb.weekly()
+        lb_monthly = lb.monthly()
+        lb_yearly = lb.yearly()
 
         base_params = {k: v for k, v in {
             "usage_type_filter": usage_type_filter,
