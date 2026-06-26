@@ -138,6 +138,18 @@ body { display: flex; min-height: 100vh; background: var(--bg); color: var(--tex
 .sidenav-link svg { flex-shrink: 0; opacity: .75; }
 .sidenav-link:hover svg, .sidenav-link.active svg { opacity: 1; }
 .sidenav-sep { height: 1px; background: var(--border-soft); margin: .35rem .75rem; }
+/* Sidebar "Upload data" action button. */
+.sidenav-upload {
+  display: flex; align-items: center; justify-content: center; gap: .5rem;
+  width: 100%; padding: .5rem .9rem;
+  font-size: .82rem; font-weight: 600;
+  color: #fff; background: var(--accent);
+  border: none; border-radius: 8px; cursor: pointer;
+  transition: filter .12s ease, transform .12s ease;
+}
+.sidenav-upload:hover { filter: brightness(1.07); }
+.sidenav-upload:active { transform: translateY(1px); }
+.sidenav-upload svg { opacity: .95; }
 .sidenav-footer {
   padding: .6rem .75rem;
   border-top: 1px solid var(--border-soft);
