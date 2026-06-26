@@ -621,6 +621,15 @@ th[data-col]:hover .sort-indicator { opacity: .55; }
 .chart-card-sub { font-size: .66rem; color: var(--faint); margin-bottom: .6rem; }
 .chart-toolbar { display: flex; gap: .3rem; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
 
+/* Compact per-chart filter dropdowns (Summary charts). Sized to sit inline with
+   the small toolbar buttons rather than the full Bootstrap form-select height. */
+.chart-filter-select {
+  width: auto; min-width: 6.5rem;
+  font-size: .72rem; line-height: 1.2;
+  padding: .12rem 1.3rem .12rem .45rem;
+  height: auto; background-position: right .35rem center;
+}
+
 /* ── Forecast page (KPI strip, snapshot table/toolbar) ── */
 .label-empty { color: var(--faint); font-style: italic; }
 .kpi-strip {

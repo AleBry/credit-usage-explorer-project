@@ -7,6 +7,17 @@
   <script src="{{ url_for('static', filename='js/charts.js') }}"></script>
 {% endblock %}
 
+{# Compact time-range dropdown reused by every Summary chart (client-side filter). #}
+{% macro weeks_select(id) %}
+<select id="{{ id }}" class="form-select form-select-sm chart-filter-select" title="Time range">
+  <option value="0">All weeks</option>
+  <option value="4">Last 4 wks</option>
+  <option value="8">Last 8 wks</option>
+  <option value="12">Last 12 wks</option>
+  <option value="26">Last 26 wks</option>
+</select>
+{% endmacro %}
+
 {% block body %}
 <div class="container py-4" style="max-width: 1280px;">
 
@@ -59,6 +70,7 @@
         <div class="dash-section-header">
           <span class="dash-section-title">Weekly Credit Burn</span>
           <div class="d-flex gap-1 align-items-center">
+            {{ weeks_select('wb-weeks-filter') }}
             <button class="btn btn-outline-secondary btn-sm py-0 px-2" title="Export PNG"  onclick="window.summaryWeeklyChart && window.summaryWeeklyChart.exportPNG()">&#8681;</button>
             <button class="btn btn-outline-secondary btn-sm py-0 px-2" title="Fullscreen"  onclick="window.summaryWeeklyChart && window.summaryWeeklyChart.openFullscreen()">&#9974;</button>
           </div>
@@ -73,6 +85,11 @@
         <div class="dash-section-header">
           <span class="dash-section-title">Active Users / Week</span>
           <div class="d-flex gap-1 align-items-center">
+            <select id="au-scope-filter" class="form-select form-select-sm chart-filter-select" title="Contract scope">
+              <option value="all">Include pre-contract</option>
+              <option value="contract">In contract only</option>
+            </select>
+            {{ weeks_select('au-weeks-filter') }}
             <button class="btn btn-outline-secondary btn-sm py-0 px-2" title="Export PNG"  onclick="window.summaryActiveUsersChart && window.summaryActiveUsersChart.exportPNG()">&#8681;</button>
             <button class="btn btn-outline-secondary btn-sm py-0 px-2" title="Fullscreen"  onclick="window.summaryActiveUsersChart && window.summaryActiveUsersChart.openFullscreen()">&#9974;</button>
           </div>
@@ -83,8 +100,15 @@
       </div>
 
       <!-- Credits by Usage Type per Week -->
+      {% set ut_toolbar %}
+        <select id="ut-type-filter" class="form-select form-select-sm chart-filter-select" title="Usage type">
+          <option value="__all__">All types</option>
+        </select>
+        {{ weeks_select('ut-weeks-filter') }}
+      {% endset %}
       {{ chart_card("summaryUsageTypeChart", "Credits by Usage Type / Week", "summaryUsageTypeChart",
-                    subtitle="Weekly credits split by usage type", height=260, bar_toggle=True) }}
+                    subtitle="Weekly credits split by usage type", height=260, bar_toggle=True,
+                    toolbar_extra=ut_toolbar) }}
 
     </div>
 
