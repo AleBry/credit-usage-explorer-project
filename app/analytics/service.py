@@ -50,7 +50,7 @@ def aggregate_by_period_fmt(
 
 
 class Leaderboards:
-    """Builds every Tiers-page leaderboard from one (already-filtered) usage frame.
+    """Builds every Leaderboard-page ranking from one (already-filtered) usage frame.
 
     Keeps the aggregation logic in one cohesive place instead of inline in the
     route, so each board is named, reusable, and easy to test.

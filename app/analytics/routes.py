@@ -7,7 +7,7 @@ from urllib.parse import urlencode
 import pandas as pd
 from flask import Blueprint, render_template, request, send_file
 
-from app.shared.chart_data import usage_type_weekly, usage_type_weekly_json
+from app.shared.chart_data import usage_type_weekly_json
 from app.shared.data_store import CreditUsageData
 from app.shared.outliers import OUTLIER_VIEWS, compute_outliers
 from .service import Leaderboards
@@ -20,8 +20,8 @@ def create_analytics_blueprint(services) -> Blueprint:
     def data() -> CreditUsageData:
         return store.data
 
-    @bp.route("/tiers", methods=["GET"])
-    def tiers_page() -> str:
+    @bp.route("/leaderboard", methods=["GET"])
+    def leaderboard_page() -> str:
         d = data()
         active_tab = request.args.get("active_tab", "users")
         usage_type_filter = request.args.get("usage_type_filter", "")
@@ -75,7 +75,7 @@ def create_analytics_blueprint(services) -> Blueprint:
         }.items() if v}
 
         return render_template(
-            "tiers.html",
+            "leaderboard.html",
             active_tab=active_tab,
             usage_type_filter=usage_type_filter,
             model_filter=model_filter,
@@ -94,7 +94,6 @@ def create_analytics_blueprint(services) -> Blueprint:
             lb_monthly=lb_monthly,
             lb_yearly=lb_yearly,
             base_query=urlencode(base_params),
-            tiers_chart_data=json.dumps(usage_type_weekly(df, type_col="usage_type_parsed_type")),
             min_credits=min_credits,
             max_credits=max_credits,
             zero_credits=zero_credits,
@@ -244,6 +243,9 @@ def create_analytics_blueprint(services) -> Blueprint:
     def user_cards_page() -> str:
         d = data()
         mode = "advanced" if request.args.get("mode", "basic").strip() == "advanced" else "basic"
+        view = request.args.get("view", "cards").strip()
+        if view not in {"cards", "table", "list"}:
+            view = "cards"
         name_query = request.args.get("name_query", "").strip()
         email_query = request.args.get("email_query", "").strip()
         date_field = request.args.get("date_field", "")
@@ -320,10 +322,27 @@ def create_analytics_blueprint(services) -> Blueprint:
                 )
                 user_list = agg.to_dict(orient="records")
 
+        # Query string (minus `view`) so the cards/table/list toggle can switch
+        # the view while preserving the active search/filters.
+        base_params = {k: v for k, v in {
+            "mode": "basic",
+            "name_query": name_query,
+            "email_query": email_query,
+            "date_field": date_field,
+            "start_date": start_date,
+            "end_date": end_date,
+            "top_n": top_n if top_n != 50 else "",
+            "min_credits": min_credits,
+            "max_credits": max_credits,
+            "zero_credits": zero_credits,
+        }.items() if v}
+
         return render_template(
             "user_cards.html",
             headers=d.columns,
             mode=mode,
+            view=view,
+            base_query=urlencode(base_params),
             name_query=name_query,
             email_query=email_query,
             date_field=date_field,

@@ -2,7 +2,7 @@
 
 These produce JSON-serialisable structures consumed by the front-end Chart.js
 code. Keeping them here (rather than inline in each blueprint) lets any page —
-Summary, Forecast, Tiers — render the same chart from one source of truth.
+Summary, Forecast, Leaderboard — render the same chart from one source of truth.
 """
 from __future__ import annotations
 

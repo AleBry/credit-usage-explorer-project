@@ -1,23 +1,17 @@
 {% extends "base.html" %}
-{% from "macros/charts.html" import chart_card %}
-{% block title %}Tiers - Credit Usage Explorer{% endblock %}
-
-{% block extra_head %}
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-  <script src="{{ url_for('static', filename='js/charts.js') }}"></script>
-{% endblock %}
+{% block title %}Leaderboard - Credit Usage Explorer{% endblock %}
 
 {% block body %}
     <div class="container py-4" style="max-width: 1280px;">
 
       <!-- HEADER -->
       <div class="mb-4">
-        <h1 class="page-title">Tiers</h1>
-        <p class="page-subtitle">Leaderboards by user, model, usage type, spend event, and time period.</p>
+        <h1 class="page-title">Leaderboard</h1>
+        <p class="page-subtitle">Rankings by user, model, usage type, spend event, and time period.</p>
       </div>
 
       <!-- FILTER BAR -->
-      <form method="get" action="{{ url_for('analytics.tiers_page') }}" id="filter-form">
+      <form method="get" action="{{ url_for('analytics.leaderboard_page') }}" id="filter-form">
         <input type="hidden" name="active_tab" value="{{ active_tab }}">
 
         <div class="filter-bar">
@@ -64,47 +58,11 @@
 
             <div class="col-md-1">
               <label class="form-label">&nbsp;</label>
-              <a class="btn btn-outline-secondary btn-sm w-100 d-block" href="{{ url_for('analytics.tiers_page') }}">Clear</a>
+              <a class="btn btn-outline-secondary btn-sm w-100 d-block" href="{{ url_for('analytics.leaderboard_page') }}">Clear</a>
             </div>
           </div>
         </div>
       </form>
-
-      <!-- Credits / Week chart with collapse toggle -->
-      <div class="chart-card mb-3">
-        <div class="d-flex justify-content-between align-items-start mb-1">
-          <div>
-            <div class="chart-card-title">Credits / Week</div>
-            <div class="chart-card-sub">Reflects filters above</div>
-          </div>
-          <div class="chart-toolbar">
-            <div class="btn-group btn-group-sm" role="group" title="Bar mode">
-              <button type="button" class="btn btn-outline-secondary py-0 px-2 active"
-                      onclick="setUsageTypeMode('tiersChart', true, this)">Stacked</button>
-              <button type="button" class="btn btn-outline-secondary py-0 px-2"
-                      onclick="setUsageTypeMode('tiersChart', false, this)">Grouped</button>
-            </div>
-            <button class="btn btn-outline-secondary btn-sm py-0 px-2" title="Export PNG"
-                    onclick="window.tiersChart && window.tiersChart.exportPNG()">&#8681;</button>
-            <button class="btn btn-outline-secondary btn-sm py-0 px-2" title="Fullscreen"
-                    onclick="window.tiersChart && window.tiersChart.openFullscreen()">&#9974;</button>
-            <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2"
-                    data-bs-toggle="collapse" data-bs-target="#tiers-chart-body"
-                    title="Show / hide chart">
-              <svg id="tiers-chart-chevron" xmlns="http://www.w3.org/2000/svg" width="12" height="12"
-                   fill="currentColor" viewBox="0 0 16 16" style="transition:transform .2s;">
-                <path fill-rule="evenodd" d="M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z"/>
-              </svg>
-            </button>
-          </div>
-        </div>
-        <div id="tiers-chart-body" class="collapse show">
-          <div style="position:relative; height:240px;">
-            <canvas id="tiersChart" class="cursor-crosshair"></canvas>
-          </div>
-        </div>
-      </div>
-      <script type="application/json" id="tiers-chart-data">{{ tiers_chart_data | safe }}</script>
 
       <!-- TABS -->
       <div class="tier-tabs">
@@ -269,7 +227,7 @@
                   <td>{{ '{:,}'.format(item.rows) }}</td>
                   <td>{{ item.unique_users }}</td>
                   <td>
-                    <a class="drill-link" href="{{ url_for('analytics.tiers_page',
+                    <a class="drill-link" href="{{ url_for('analytics.leaderboard_page',
                         active_tab='users',
                         model_filter=item.usage_type_model,
                         usage_type_filter=usage_type_filter,
@@ -318,7 +276,7 @@
                   <td>{{ '{:,}'.format(item.rows) }}</td>
                   <td>{{ item.unique_users }}</td>
                   <td>
-                    <a class="drill-link" href="{{ url_for('analytics.tiers_page',
+                    <a class="drill-link" href="{{ url_for('analytics.leaderboard_page',
                         active_tab='users',
                         usage_type_filter=item.usage_type_parsed_type,
                         model_filter=model_filter,
@@ -550,19 +508,6 @@
     <script>
       document.querySelectorAll('#filter-form select, #filter-form input[type="date"]').forEach(el => {
         el.addEventListener('change', () => document.getElementById('filter-form').submit());
-      });
-
-      const _tiersData = JSON.parse(document.getElementById('tiers-chart-data').textContent);
-      window.tiersChart = renderUsageTypeChart('tiersChart', _tiersData,
-        { exportName: 'Credits by Usage Type per Week' });
-
-      // Rotate chevron when chart collapses / expands
-      const _tiersBody = document.getElementById('tiers-chart-body');
-      _tiersBody.addEventListener('hide.bs.collapse', () => {
-        document.getElementById('tiers-chart-chevron').style.transform = 'rotate(-90deg)';
-      });
-      _tiersBody.addEventListener('show.bs.collapse', () => {
-        document.getElementById('tiers-chart-chevron').style.transform = '';
       });
     </script>
 {% endblock %}

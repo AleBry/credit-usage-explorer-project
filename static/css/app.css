@@ -20,6 +20,19 @@
   --accent-soft: #eef4ff;   /* subtle accent wash */
   --radius: 10px;
   --shadow: 0 4px 12px rgba(0, 0, 0, .05);
+  /* Density lever — shared by the cards/table/list result views. Toggling
+     .density-compact on <html> tightens every view at once. */
+  --view-pad-y: .6rem;
+  --view-pad-x: .75rem;
+  --view-font: .85rem;
+  --view-gap: 1rem;
+}
+
+.density-compact {
+  --view-pad-y: .3rem;
+  --view-pad-x: .5rem;
+  --view-font: .78rem;
+  --view-gap: .5rem;
 }
 
 [data-theme="dark"] {
@@ -467,6 +480,62 @@ th[data-col]:hover .sort-indicator { opacity: .55; }
   margin-bottom: .65rem;
 }
 .result-count { font-size: .8rem; color: var(--muted); margin-bottom: 1rem; }
+
+/* ── Shared result views (cards / table / list) + density ── */
+.view-toolbar {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: .75rem; flex-wrap: wrap; margin-bottom: 1rem;
+}
+.view-controls .btn { display: inline-flex; align-items: center; gap: .35rem; }
+.view-controls .btn svg { flex: 0 0 auto; }
+/* Collapse the toggle to icon-only on narrow screens to keep one row. */
+@media (max-width: 575.98px) { .view-btn-label { display: none; } }
+/* Compact cards: tighten padding + metric spacing when density is on. */
+.density-compact .user-card-body { padding: var(--view-pad-y) var(--view-pad-x); }
+.density-compact .row.g-3 { --bs-gutter-x: var(--view-gap); --bs-gutter-y: var(--view-gap); }
+.density-compact .metric-row { padding-top: .25rem; margin-top: .25rem; font-size: .76rem; }
+
+/* Table view — dense, sortable-feeling rows that link like the cards. */
+.view-table { width: 100%; border-collapse: collapse; font-size: var(--view-font); }
+.view-table thead th {
+  text-align: left; color: var(--muted); font-weight: 600;
+  font-size: .72rem; text-transform: uppercase; letter-spacing: .04em;
+  padding: var(--view-pad-y) var(--view-pad-x);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2); position: sticky; top: 0;
+}
+.view-table th.num, .view-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.view-table tbody td {
+  padding: var(--view-pad-y) var(--view-pad-x);
+  border-bottom: 1px solid var(--border-soft); color: var(--text); vertical-align: middle;
+}
+.view-table tbody tr { cursor: pointer; transition: background .1s ease; }
+.view-table tbody tr:hover { background: var(--hover); }
+.view-table .vt-name { font-weight: 600; color: var(--accent); }
+.view-table .vt-email { color: var(--muted); font-size: .9em; }
+.view-table td.vt-strong { font-weight: 700; color: var(--ink); }
+
+/* List view — one scannable line per record. */
+.view-list-row {
+  display: flex; align-items: center; gap: .65rem; text-decoration: none; color: inherit;
+  padding: var(--view-pad-y) var(--view-pad-x);
+  border-bottom: 1px solid var(--border-soft); transition: background .1s ease;
+}
+.view-list-row:hover { background: var(--hover); }
+.view-list-row .vlr-id { min-width: 0; flex: 1 1 auto; }
+.view-list-row .vlr-name { font-weight: 600; color: var(--accent); font-size: var(--view-font); }
+.view-list-row .vlr-email { color: var(--muted); font-size: .8em; }
+.view-list-row .vlr-metrics {
+  color: var(--text-soft); font-size: var(--view-font); white-space: nowrap;
+  font-variant-numeric: tabular-nums; flex: 0 0 auto;
+}
+.view-list-row .vlr-strong { font-weight: 700; color: var(--ink); }
+.view-list-row .vlr-sep { color: var(--faint); margin: 0 .1rem; }
+.view-list-row .vlr-caret { color: var(--faint); font-size: 1.1rem; flex: 0 0 auto; }
+/* Drop the secondary metrics on very narrow screens, keep credits. */
+@media (max-width: 575.98px) {
+  .view-list-row .vlr-metrics { white-space: normal; text-align: right; }
+}
 
 /* ── User summary page ── */
 .stat-card { padding: 1.1rem 1rem; text-align: center; }

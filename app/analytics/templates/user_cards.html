@@ -182,16 +182,95 @@
         </div>
       </form>
 
-      <!-- RESULT COUNT -->
-      {% if users %}
-      <div class="result-count">
-        Showing {{ users | length }} user{{ 's' if users | length != 1 else '' }}
-        {% if min_credits or max_credits %} &middot; credits {{ min_credits or '0' }}&ndash;{{ max_credits or '&infin;' }}{% endif %}
-        {% if zero_credits == '1' %} &middot; zero credits only{% endif %}
+      <!-- RESULT TOOLBAR: count + view switch + density -->
+      {% set view_base = url_for('analytics.user_cards_page') ~ '?' ~ base_query %}
+      <div class="view-toolbar">
+        <div class="result-count mb-0">
+          {% if users %}
+          Showing {{ users | length }} user{{ 's' if users | length != 1 else '' }}
+          {% if min_credits or max_credits %} &middot; credits {{ min_credits or '0' }}&ndash;{{ max_credits or '&infin;' }}{% endif %}
+          {% if zero_credits == '1' %} &middot; zero credits only{% endif %}
+          {% endif %}
+        </div>
+        <div class="d-flex gap-2 view-controls">
+          <div class="btn-group btn-group-sm" role="group" aria-label="Result view">
+            <a class="btn {{ 'btn-primary' if view == 'cards' else 'btn-outline-primary' }}" href="{{ view_base }}&view=cards" title="Card view">
+              <svg width="14" height="14" fill="currentColor" viewBox="0 0 16 16"><path d="M1 2.5A1.5 1.5 0 0 1 2.5 1h3A1.5 1.5 0 0 1 7 2.5v3A1.5 1.5 0 0 1 5.5 7h-3A1.5 1.5 0 0 1 1 5.5zm8 0A1.5 1.5 0 0 1 10.5 1h3A1.5 1.5 0 0 1 15 2.5v3A1.5 1.5 0 0 1 13.5 7h-3A1.5 1.5 0 0 1 9 5.5zm-8 8A1.5 1.5 0 0 1 2.5 9h3A1.5 1.5 0 0 1 7 10.5v3A1.5 1.5 0 0 1 5.5 15h-3A1.5 1.5 0 0 1 1 13.5zm8 0A1.5 1.5 0 0 1 10.5 9h3a1.5 1.5 0 0 1 1.5 1.5v3a1.5 1.5 0 0 1-1.5 1.5h-3A1.5 1.5 0 0 1 9 13.5z"/></svg>
+              <span class="view-btn-label">Cards</span>
+            </a>
+            <a class="btn {{ 'btn-primary' if view == 'table' else 'btn-outline-primary' }}" href="{{ view_base }}&view=table" title="Table view">
+              <svg width="14" height="14" fill="currentColor" viewBox="0 0 16 16"><path d="M0 2a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2zm15 2h-4v3h4zm0 4h-4v3h4zm0 4h-4v3h3a1 1 0 0 0 1-1zm-5 3v-3H6v3zm-5 0v-3H1v2a1 1 0 0 0 1 1zm-4-4h4V8H1zm0-4h4V4H1zm5 0h4V4H6zm4 4H6v3h4z"/></svg>
+              <span class="view-btn-label">Table</span>
+            </a>
+            <a class="btn {{ 'btn-primary' if view == 'list' else 'btn-outline-primary' }}" href="{{ view_base }}&view=list" title="List view">
+              <svg width="14" height="14" fill="currentColor" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M5 11.5a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9a.5.5 0 0 1-.5-.5m0-4a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9a.5.5 0 0 1-.5-.5m0-4a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9a.5.5 0 0 1-.5-.5"/><path d="M2.5 4a1 1 0 1 0 0-2 1 1 0 0 0 0 2m0 4a1 1 0 1 0 0-2 1 1 0 0 0 0 2m0 4a1 1 0 1 0 0-2 1 1 0 0 0 0 2"/></svg>
+              <span class="view-btn-label">List</span>
+            </a>
+          </div>
+          <button type="button" class="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1" onclick="toggleDensity()" title="Toggle row density">
+            <svg width="14" height="14" fill="currentColor" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M1 8a.5.5 0 0 1 .5-.5h13a.5.5 0 0 1 0 1h-13A.5.5 0 0 1 1 8m7-8a.5.5 0 0 1 .5.5v3.793l1.146-1.147a.5.5 0 0 1 .708.708l-2 2a.5.5 0 0 1-.708 0l-2-2a.5.5 0 1 1 .708-.708L7.5 4.293V.5A.5.5 0 0 1 8 0m0 16a.5.5 0 0 0 .5-.5v-3.793l1.146 1.147a.5.5 0 0 0 .708-.708l-2-2a.5.5 0 0 0-.708 0l-2 2a.5.5 0 0 0 .708.708L7.5 11.707V15.5a.5.5 0 0 0 .5.5"/></svg>
+            <span data-density-label>Compact</span>
+          </button>
+        </div>
       </div>
-      {% endif %}
 
-      <!-- USERS -->
+      {% if not users %}
+        <div class="empty-state">No users found</div>
+
+      {% elif view == 'table' %}
+      <!-- TABLE VIEW -->
+      <div class="dash-section p-0" style="overflow-x:auto;">
+        <table class="view-table">
+          <thead>
+            <tr>
+              <th>User</th>
+              <th class="num">Records</th>
+              <th class="num">Credits</th>
+              <th class="num">Tokens</th>
+              <th class="num">Counts</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for u in users %}
+            {% set link = url_for('analytics.user_summary', name=u.name or '', email=u.email or '', date_field=date_field, start_date=start_date, end_date=end_date) %}
+            <tr onclick="window.location='{{ link }}'">
+              <td>
+                <div class="vt-name">{{ u.name or u.email or 'Unknown user' }}</div>
+                {% if u.email and u.name %}<div class="vt-email">{{ u.email }}</div>{% endif %}
+              </td>
+              <td class="num">{{ '{:,}'.format(u.rows) }}</td>
+              <td class="num vt-strong">{{ '{:,.2f}'.format(u.total_credits) }}</td>
+              <td class="num">{{ '{:,.0f}'.format(u.total_tokens if u.total_tokens is defined else 0) }}</td>
+              <td class="num">{{ '{:,.0f}'.format(u.total_counts if u.total_counts is defined else 0) }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      {% elif view == 'list' %}
+      <!-- LIST VIEW (compact) -->
+      <div class="dash-section p-0">
+        {% for u in users %}
+        {% set link = url_for('analytics.user_summary', name=u.name or '', email=u.email or '', date_field=date_field, start_date=start_date, end_date=end_date) %}
+        <a class="view-list-row" href="{{ link }}">
+          <span class="avatar avatar-sm">{{ (u.name or u.email or '?')[:2] }}</span>
+          <span class="vlr-id">
+            <span class="vlr-name">{{ u.name or u.email or 'Unknown user' }}</span>
+            {% if u.email and u.name %}<span class="vlr-email"> &middot; {{ u.email }}</span>{% endif %}
+          </span>
+          <span class="vlr-metrics">
+            <span class="vlr-strong">{{ '{:,.2f}'.format(u.total_credits) }}</span> cr
+            <span class="vlr-sep">&middot;</span> {{ '{:,}'.format(u.rows) }} rec
+            <span class="vlr-sep">&middot;</span> {{ '{:,.0f}'.format(u.total_tokens if u.total_tokens is defined else 0) }} tok
+          </span>
+          <span class="vlr-caret">&rsaquo;</span>
+        </a>
+        {% endfor %}
+      </div>
+
+      {% else %}
+      <!-- CARDS VIEW (default) -->
       <div class="row g-3">
         {% for u in users %}
         <div class="col-md-4">
@@ -232,12 +311,9 @@
             </div>
           </a>
         </div>
-        {% else %}
-        <div class="col-12">
-          <div class="empty-state">No users found</div>
-        </div>
         {% endfor %}
       </div>
+      {% endif %}
       {% endif %}
 
     </div>
@@ -248,5 +324,12 @@
       document.querySelectorAll('input[type="date"], select[name="date_field"]').forEach(el => {
         el.addEventListener('change', () => el.closest('form').submit());
       });
+      // Sync the density button label with the current (global) density state.
+      (function () {
+        var compact = document.documentElement.classList.contains('density-compact');
+        document.querySelectorAll('[data-density-label]').forEach(function (b) {
+          b.textContent = compact ? 'Comfortable' : 'Compact';
+        });
+      })();
     </script>
 {% endblock %}

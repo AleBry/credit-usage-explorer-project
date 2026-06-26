@@ -8,6 +8,10 @@
         try {
           if (localStorage.getItem('theme') === 'dark')
             document.documentElement.setAttribute('data-theme', 'dark');
+          // Density is a global lever (comfortable | compact); applied on <html>
+          // before paint so list/table/card spacing never flashes.
+          if (localStorage.getItem('view-density') === 'compact')
+            document.documentElement.classList.add('density-compact');
         } catch (e) {}
       })();
       function toggleTheme() {
@@ -15,6 +19,13 @@
         var next = dark ? 'light' : 'dark';
         document.documentElement.setAttribute('data-theme', next);
         try { localStorage.setItem('theme', next); } catch (e) {}
+      }
+      function toggleDensity() {
+        var compact = document.documentElement.classList.toggle('density-compact');
+        try { localStorage.setItem('view-density', compact ? 'compact' : 'comfortable'); } catch (e) {}
+        document.querySelectorAll('[data-density-label]').forEach(function (b) {
+          b.textContent = compact ? 'Comfortable' : 'Compact';
+        });
       }
     </script>
     <title>{% block title %}CUE Project{% endblock %}</title>
@@ -104,12 +115,12 @@
           Records
         </a>
 
-        <a class="sidenav-link {% if request.endpoint == 'analytics.tiers_page' %}active{% endif %}"
-           href="{{ url_for('analytics.tiers_page') }}">
+        <a class="sidenav-link {% if request.endpoint == 'analytics.leaderboard_page' %}active{% endif %}"
+           href="{{ url_for('analytics.leaderboard_page') }}">
           <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" fill="currentColor" viewBox="0 0 16 16">
             <path d="M4 11H2v3h2v-3zm5-4H7v7h2V7zm5-5v12h-2V2h2zm-2-1a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1h-2zM6 7a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V7zm-5 4a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1v-3z"/>
           </svg>
-          Tiers
+          Leaderboard
         </a>
 
         <a class="sidenav-link {% if request.endpoint in ('analytics.user_cards_page', 'analytics.user_summary') %}active{% endif %}"
