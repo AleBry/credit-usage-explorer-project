@@ -12,8 +12,11 @@ from flask import Blueprint, redirect, render_template, request, url_for
 
 from app.shared.chart_data import usage_type_weekly_json
 from app.shared.data_store import CreditUsageData
-from app.forecast.service import ChartDataBuilder
-from .service import compute_summary_metrics, compute_weekly_trend
+from .service import (
+    compute_active_users_weekly,
+    compute_summary_metrics,
+    compute_weekly_trend,
+)
 from .setup_routes import register_setup_routes
 from .diagnostics_routes import register_diagnostics_routes
 from .alerts_routes import register_alerts_routes
@@ -41,10 +44,23 @@ def create_dashboard_blueprint(services) -> Blueprint:
         df = d.df
 
         metrics = compute_summary_metrics(df)
-        weekly_trend = compute_weekly_trend(df)
+
+        # Contract start drives the in-contract / pre-contract split shared by
+        # the Summary charts (weekly-burn gray coloring + scope dropdowns).
+        contract_start_str = ""
+        try:
+            contract_start_str = str(
+                config_svc.load_contract().get("contract", {}).get("contract_start_date", "") or ""
+            )
+        except Exception:
+            contract_start_str = ""
+
+        weekly_trend = compute_weekly_trend(df, contract_start_str)
+        # All three Summary charts share one raw-frame week grouping + contract
+        # split, so they always cover the same weeks (no straddling-week gap).
+        active_users_data = compute_active_users_weekly(df, contract_start_str)
 
         forecast_snapshot = None
-        active_users_data = "[]"
         ps = pipeline.status()
         try:
             config = config_svc.load_contract()
@@ -63,9 +79,6 @@ def create_dashboard_blueprint(services) -> Blueprint:
                     "forecast_weekly_burn": fc["forecast_weekly_burn"],
                     "forecast_contract_end_balance": fc["forecast_contract_end_balance"],
                 }
-                chart_builder = ChartDataBuilder(svc, svc.historical_df, svc.operational_df)
-                contract_start_str = str(cs.get("contract_start_date", ""))
-                active_users_data = chart_builder.active_users_json(contract_start_str)
         except Exception:
             pass
 
@@ -73,7 +86,7 @@ def create_dashboard_blueprint(services) -> Blueprint:
             "summary.html",
             metrics=metrics,
             weekly_trend=weekly_trend,
-            usage_type_weekly=usage_type_weekly_json(df),
+            usage_type_weekly=usage_type_weekly_json(df, contract_start=contract_start_str),
             forecast_snapshot=forecast_snapshot,
             pipeline_status=ps,
             data_source={

@@ -552,11 +552,11 @@
       </div>
       <div class="forecast-usage-actions">
         <label class="form-check-label d-flex align-items-center gap-1 mb-0" style="cursor:pointer;"
-               title="Include the current, still-in-progress week in the burn-rate calculation. Off by default since a partial week understates the weekly burn.">
-          <input type="checkbox" class="form-check-input mb-0" id="include-partial-chk"
-                 {% if not exclude_partial %}checked{% endif %}
-                 onchange="applyExcludePartial(!this.checked)">
-          Include partial week
+               title="Exclude the current, still-in-progress week from the burn-rate calculation. On by default since a partial week understates the weekly burn.">
+          <input type="checkbox" class="form-check-input mb-0" id="exclude-partial-chk"
+                 {% if exclude_partial %}checked{% endif %}
+                 onchange="applyExcludePartial(this.checked)">
+          Exclude partial week
         </label>
       </div>
     </div>
@@ -727,52 +727,8 @@
     </div>
   </div>
 
-  <!-- Weekly Burn and Active Users -->
-  <div class="row g-3 mb-4">
-    <div class="col-md-6">
-      <div class="chart-card h-100">
-        <div class="d-flex justify-content-between align-items-start mb-1">
-          <div>
-            <div class="chart-card-title">Weekly Credit Burn</div>
-            <div class="chart-card-sub">Ctrl+scroll to zoom &nbsp;·&nbsp; drag to pan</div>
-          </div>
-          <div class="chart-toolbar">
-            <div class="btn-group btn-group-sm" role="group">
-              <button class="btn btn-outline-secondary py-0 px-2" title="Zoom in"  onclick="window.weeklyChart && window.weeklyChart.zoom(1.25)">+</button>
-              <button class="btn btn-outline-secondary py-0 px-2" title="Zoom out" onclick="window.weeklyChart && window.weeklyChart.zoom(0.8)">&minus;</button>
-              <button class="btn btn-outline-secondary py-0 px-2" title="Reset"    onclick="window.weeklyChart && window.weeklyChart.resetZoom()">&#8635;</button>
-            </div>
-            <button class="btn btn-outline-secondary btn-sm py-0 px-2" title="Export PNG" onclick="window.weeklyChart && window.weeklyChart.exportPNG()">&#8681;</button>
-            <button class="btn btn-outline-secondary btn-sm py-0 px-2" title="Fullscreen" onclick="window.weeklyChart && window.weeklyChart.openFullscreen()">&#9974;</button>
-          </div>
-        </div>
-        <div style="position:relative; height: 240px;">
-          <canvas id="weeklyChart" class="cursor-crosshair"></canvas>
-        </div>
-      </div>
-    </div>
-    <div class="col-md-6">
-      <div class="chart-card h-100">
-        <div class="d-flex justify-content-between align-items-start mb-1">
-          <div>
-            <div class="chart-card-title">Active Users / Week</div>
-            <div class="chart-card-sub">Users with credit activity per week</div>
-          </div>
-          <div class="chart-toolbar">
-            <button class="btn btn-outline-secondary btn-sm py-0 px-2" title="Export PNG" onclick="window.activeUsersChart && window.activeUsersChart.exportPNG()">&#8681;</button>
-            <button class="btn btn-outline-secondary btn-sm py-0 px-2" title="Fullscreen" onclick="window.activeUsersChart && window.activeUsersChart.openFullscreen()">&#9974;</button>
-          </div>
-        </div>
-        <div style="position:relative; height: 240px;">
-          <canvas id="activeUsersChart" class="cursor-crosshair"></canvas>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Credits by Usage Type per Week -->
-  {{ chart_card("forecastUsageTypeChart", "Credits by Usage Type / Week", "forecastUsageTypeChart",
-                subtitle="Weekly credits split by usage type", height=260, bar_toggle=True) }}
+  {# Weekly Credit Burn, Active Users, and Credits by Usage Type charts removed —
+     they live on the Summary page; the Forecast page focuses on the burndown. #}
 
   <!-- Details Accordion -->
   <div class="section-label">Details</div>

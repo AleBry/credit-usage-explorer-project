@@ -37,6 +37,8 @@
 
     const typeSel = document.getElementById('ut-type-filter');
     const weeksSel = document.getElementById('ut-weeks-filter');
+    const scopeSel = document.getElementById('ut-scope-filter');
+    const inC = data.in_contract || data.weeks.map(() => true);
     if (typeSel) {
       typeSel.insertAdjacentHTML('beforeend',
         data.series.map(s => `<option value="${s.name}">${s.name}</option>`).join(''));
@@ -44,26 +46,38 @@
 
     function apply() {
       const type = typeSel ? typeSel.value : '__all__';
-      const start = (n => (n > 0 ? Math.max(0, data.weeks.length - n) : 0))(weeksOf(weeksSel));
+      // Visible week indices: drop pre-contract weeks (if scoped), then last-N.
+      let idx = data.weeks.map((_, i) => i);
+      if (scopeSel && scopeSel.value === 'contract') idx = idx.filter(i => inC[i]);
+      const n = weeksOf(weeksSel);
+      if (n > 0) idx = idx.slice(-n);
       const series = (type === '__all__') ? data.series : data.series.filter(s => s.name === type);
       const c = chart.chart;
-      c.data.labels = data.weeks.slice(start);
+      c.data.labels = idx.map(i => data.weeks[i]);
       c.data.datasets = series.map(s => ({
         label: s.name,
-        data: s.data.slice(start),
+        data: idx.map(i => s.data[i]),
         backgroundColor: colorByName[s.name],
         borderWidth: 0,
         borderRadius: 2,
       }));
       c.update();
     }
-    [typeSel, weeksSel].forEach(s => s && s.addEventListener('change', apply));
+    [typeSel, weeksSel, scopeSel].forEach(s => s && s.addEventListener('change', apply));
   })();
 
   // ===== Weekly credit burn =====
   (function initWeekly() {
     const raw = D.weeklyTrend || [];
     if (!raw.length) { emptyMsg('weeklyChart', 'No date data available to plot.'); return; }
+
+    // Pre-contract weeks render gray (matching the Active Users chart).
+    const IN_BG = 'rgba(13,110,253,0.65)', IN_BD = 'rgba(13,110,253,1)';
+    const PRE_BG = 'rgba(108,117,125,0.45)', PRE_BD = 'rgba(108,117,125,0.85)';
+    const bgFor = rows => rows.map(d => (d.in_contract ? IN_BG : PRE_BG));
+    const bdFor = rows => rows.map(d => (d.in_contract ? IN_BD : PRE_BD));
+    let curIc = raw.map(d => d.in_contract);
+
     window.summaryWeeklyChart = new BNLChart('weeklyChart', {
       type: 'bar',
       data: {
@@ -71,15 +85,20 @@
         datasets: [{
           label: 'Credits used',
           data: raw.map(d => d.total_credits),
-          backgroundColor: 'rgba(13,110,253,0.65)',
-          borderColor: 'rgba(13,110,253,1)',
+          backgroundColor: bgFor(raw),
+          borderColor: bdFor(raw),
           borderWidth: 1,
           borderRadius: 3,
         }],
       },
       options: {
         responsive: true,
-        plugins: { legend: { display: false } },
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: {
+            footer: items => (curIc[items[0].dataIndex] ? '' : 'Pre-contract'),
+          } },
+        },
         scales: {
           y: { beginAtZero: true, ticks: { callback: v => v.toLocaleString() } },
           x: { ticks: { maxRotation: 45, font: { size: 10 } } },
@@ -88,14 +107,20 @@
     }, { exportName: 'Weekly Credit Burn' });
 
     const weeksSel = document.getElementById('wb-weeks-filter');
+    const scopeSel = document.getElementById('wb-scope-filter');
     function apply() {
-      const slice = lastN(raw, weeksOf(weeksSel));
+      let rows = raw;
+      if (scopeSel && scopeSel.value === 'contract') rows = rows.filter(d => d.in_contract);
+      rows = lastN(rows, weeksOf(weeksSel));
+      curIc = rows.map(d => d.in_contract);
       const c = window.summaryWeeklyChart.chart;
-      c.data.labels = slice.map(d => d.week);
-      c.data.datasets[0].data = slice.map(d => d.total_credits);
+      c.data.labels = rows.map(d => d.week);
+      c.data.datasets[0].data = rows.map(d => d.total_credits);
+      c.data.datasets[0].backgroundColor = bgFor(rows);
+      c.data.datasets[0].borderColor = bdFor(rows);
       c.update();
     }
-    if (weeksSel) weeksSel.addEventListener('change', apply);
+    [weeksSel, scopeSel].forEach(s => s && s.addEventListener('change', apply));
   })();
 
   // ===== Active users per week =====

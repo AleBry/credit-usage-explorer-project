@@ -30,6 +30,7 @@ def usage_type_weekly(
     type_col: str | None = None,
     top_n: int = 8,
     value_col: str = "usage_credits",
+    contract_start: str = "",
 ) -> dict:
     """Weekly credits broken down by usage type, ready for a stacked bar chart.
 
@@ -37,6 +38,7 @@ def usage_type_weekly(
         {
           "weeks": ["2026-03-02", ...],          # Monday-anchored week starts
           "series": [{"name": "chat", "data": [..]}, ...],   # one per type
+          "in_contract": [true, false, ...],     # parallel to weeks
           "type_col": "usage_type_parsed_type",
           "total": 1234.5,
         }
@@ -44,7 +46,7 @@ def usage_type_weekly(
     Returns empty structure when the required columns are absent.
     """
     if df is None or df.empty:
-        return {"weeks": [], "series": [], "type_col": None, "total": 0.0}
+        return {"weeks": [], "series": [], "in_contract": [], "type_col": None, "total": 0.0}
 
     type_column = _pick_type_column(df, type_col)
     if (
@@ -52,13 +54,13 @@ def usage_type_weekly(
         or "date_partition" not in df.columns
         or value_col not in df.columns
     ):
-        return {"weeks": [], "series": [], "type_col": type_column, "total": 0.0}
+        return {"weeks": [], "series": [], "in_contract": [], "type_col": type_column, "total": 0.0}
 
     work = df[["date_partition", type_column, value_col]].copy()
     work["_date"] = pd.to_datetime(work["date_partition"], errors="coerce")
     work = work.dropna(subset=["_date"])
     if work.empty:
-        return {"weeks": [], "series": [], "type_col": type_column, "total": 0.0}
+        return {"weeks": [], "series": [], "in_contract": [], "type_col": type_column, "total": 0.0}
 
     work["_week"] = work["_date"] - pd.to_timedelta(work["_date"].dt.dayofweek, unit="D")
     work["_type"] = work[type_column].fillna("N/A").astype(str).replace("", "N/A")
@@ -85,9 +87,15 @@ def usage_type_weekly(
         {"name": str(t), "data": [round(float(v), 2) for v in pivot[t].tolist()]}
         for t in ordered_types
     ]
+    # Per-week in-contract flag (week start >= contract start). No contract set
+    # → all weeks count as in-contract so the scope filter is a no-op.
+    cstart = pd.to_datetime(contract_start, errors="coerce")
+    cstart = None if pd.isna(cstart) else cstart
+    in_contract = [bool(cstart is None or w >= cstart) for w in pivot.index]
     return {
         "weeks": weeks,
         "series": series,
+        "in_contract": in_contract,
         "type_col": type_column,
         "total": round(float(work["_val"].sum()), 2),
     }

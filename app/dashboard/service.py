@@ -37,7 +37,7 @@ def compute_summary_metrics(df: pd.DataFrame) -> dict:
     }
 
 
-def compute_weekly_trend(df: pd.DataFrame) -> str:
+def compute_weekly_trend(df: pd.DataFrame, contract_start: str = "") -> str:
     if "date_partition" not in df.columns or "usage_credits" not in df.columns:
         return "[]"
     wdf = df[["date_partition", "usage_credits", "email"]].copy()
@@ -49,11 +49,53 @@ def compute_weekly_trend(df: pd.DataFrame) -> str:
         .agg(total_credits=("usage_credits", "sum"), unique_users=("email", "nunique"))
         .sort_values("week")
     )
+    # Weeks starting before the contract are "pre-contract" (rendered gray and
+    # hidden by the in-contract scope filter). No contract set → treat all as
+    # in-contract so the chart stays normal.
+    cstart = pd.to_datetime(contract_start, errors="coerce")
+    cstart = None if pd.isna(cstart) else cstart
     return json.dumps([
         {
             "week": str(row["week"].date()),
             "total_credits": round(float(row["total_credits"]), 2),
             "unique_users": int(row["unique_users"]),
+            "in_contract": bool(cstart is None or row["week"] >= cstart),
+        }
+        for _, row in weekly.iterrows()
+    ])
+
+
+def compute_active_users_weekly(df: pd.DataFrame, contract_start: str = "") -> str:
+    """Active users (distinct emails with credits > 0) per Monday-anchored week.
+
+    Built straight from the raw frame — same week grouping as the weekly-burn /
+    usage-type charts — so all three Summary charts cover the exact same weeks.
+    (The forecast service's historical/operational split drops a week that
+    straddles the contract start, which is why that source skipped a week.)
+    """
+    if "date_partition" not in df.columns or "email" not in df.columns:
+        return "[]"
+    cols = ["date_partition", "email"] + (["usage_credits"] if "usage_credits" in df.columns else [])
+    wdf = df[cols].copy()
+    wdf["_date"] = pd.to_datetime(wdf["date_partition"], errors="coerce")
+    wdf = wdf.dropna(subset=["_date"])
+    if "usage_credits" in wdf.columns:
+        wdf = wdf[pd.to_numeric(wdf["usage_credits"], errors="coerce").fillna(0.0) > 0]
+    if wdf.empty:
+        return "[]"
+    wdf["week"] = wdf["_date"] - pd.to_timedelta(wdf["_date"].dt.dayofweek, unit="D")
+    weekly = (
+        wdf.groupby("week", as_index=False)
+        .agg(active_users=("email", "nunique"))
+        .sort_values("week")
+    )
+    cstart = pd.to_datetime(contract_start, errors="coerce")
+    cstart = None if pd.isna(cstart) else cstart
+    return json.dumps([
+        {
+            "week_start": str(row["week"].date()),
+            "active_users": int(row["active_users"]),
+            "in_contract": bool(cstart is None or row["week"] >= cstart),
         }
         for _, row in weekly.iterrows()
     ])
