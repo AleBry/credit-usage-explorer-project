@@ -1,1 +1,1 @@
-- date of when credits added for what-if add credits
+- curl script for downloading new data, auto uploaded to program

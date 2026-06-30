@@ -568,6 +568,10 @@
                oninput="syncWhatIfSlider(+this.value); applyWhatIfExtra(+this.value)">
         <input type="range" id="whatif-slider" class="form-range" min="0" step="1000" value="0"
                oninput="document.getElementById('whatif-extra').value=this.value; applyWhatIfExtra(+this.value)">
+        <span class="text-muted">on</span>
+        <input type="date" id="whatif-date" class="form-control form-control-sm" style="width:150px !important;"
+               title="Date the credits are added. Leave blank to add them now."
+               onchange="applyWhatIfExtra(+document.getElementById('whatif-extra').value)">
         <button type="button" class="btn btn-link btn-sm p-0 text-muted" style="font-size:.7rem;" onclick="resetWhatIf()">Reset</button>
         <span id="whatif-stats" class="d-flex gap-3 flex-wrap" style="font-size:.72rem;"></span>
       </div>
@@ -946,6 +950,11 @@
         const fd = _fd();
         const slider = document.getElementById('whatif-slider');
         if (slider) slider.max = Math.round(fd.purchased);
+        const dateInput = document.getElementById('whatif-date');
+        if (dateInput) {
+          if (fd.latestDate)     dateInput.min = fd.latestDate;
+          if (fd.contractEndDate) dateInput.max = fd.contractEndDate;
+        }
       }
 
       window.toggleWhatIf = function () {
@@ -970,50 +979,73 @@
 
       window.applyWhatIfExtra = function (delta) {
         const fd = _fd();
-        const newRemaining  = fd.currentRemaining + delta;
-        const newEndBalance = newRemaining - fd.weeklyBurn * fd.csWeeksLeft;
-        const weeksToExh    = fd.weeklyBurn > 0 ? newRemaining / fd.weeklyBurn : Infinity;
-        const exhausted     = weeksToExh < fd.csWeeksLeft;
+        const msPerWeek = 7 * 24 * 60 * 60 * 1000;
+
+        // Date the credits arrive. Blank/invalid/past → treat as "now" (latest usage date).
+        const dateInput = document.getElementById('whatif-date');
+        const start = new Date(fd.latestDate);
+        let addDate = (dateInput && dateInput.value) ? new Date(dateInput.value + 'T00:00:00') : start;
+        if (isNaN(addDate) || addDate < start) addDate = start;
+        const weeksUntilAdd = Math.max(0, (addDate - start) / msPerWeek);
+
+        // Base burndown remaining at the add date (clamped at 0 — can't go below empty),
+        // then the new credits land on top of it.
+        const baseAtAdd      = Math.max(0, fd.currentRemaining - fd.weeklyBurn * weeksUntilAdd);
+        const startRemaining = baseAtAdd + delta;
+
+        const weeksFromAddToEnd = Math.max(0, fd.csWeeksLeft - weeksUntilAdd);
+        const newEndBalance     = startRemaining - fd.weeklyBurn * weeksFromAddToEnd;
+        const weeksToExh        = fd.weeklyBurn > 0 ? startRemaining / fd.weeklyBurn : Infinity;
+        const exhausted         = weeksToExh < weeksFromAddToEnd;
 
         const fmt = n => Math.round(n).toLocaleString();
         const sign = n => (n >= 0 ? '+' : '') + fmt(n);
 
-        let statsHtml = `<span>New remaining: <strong>${fmt(newRemaining)}</strong></span>`
+        let statsHtml = `<span>New remaining: <strong>${fmt(startRemaining)}</strong></span>`
           + `<span>New end balance: <strong class="${newEndBalance >= 0 ? 'text-success' : 'text-danger'}">${sign(newEndBalance)}</strong></span>`;
 
         if (exhausted) {
-          const exhDate = new Date(fd.latestDate);
-          exhDate.setDate(exhDate.getDate() + Math.round(weeksToExh * 7));
+          const exhDate = new Date(addDate.getTime() + Math.round(weeksToExh * 7) * 24 * 60 * 60 * 1000);
           statsHtml += `<span class="text-danger">Exhaustion ~${exhDate.toISOString().slice(0,10)}</span>`;
         } else {
           statsHtml += `<span class="text-success">No exhaustion &#10003;</span>`;
         }
-        statsHtml += `<span class="text-muted">${fmt(delta)} credits added</span>`;
+        const addedNote = weeksUntilAdd > 0
+          ? `${fmt(delta)} credits added ${addDate.toISOString().slice(0,10)}`
+          : `${fmt(delta)} credits added`;
+        statsHtml += `<span class="text-muted">${addedNote}</span>`;
         document.getElementById('whatif-stats').innerHTML = statsHtml;
 
-        _drawWhatIfLine(fd, newRemaining);
+        _drawWhatIfLine(fd, addDate, startRemaining);
       };
 
       window.resetWhatIf = function () {
         document.getElementById('whatif-extra').value = 0;
         document.getElementById('whatif-slider').value = 0;
+        const dateInput = document.getElementById('whatif-date');
+        if (dateInput) dateInput.value = '';
         document.getElementById('whatif-stats').innerHTML = '';
         _clearWhatIfLine();
       };
 
-      function _drawWhatIfLine(fd, startRemaining) {
+      // Draw the scenario line burning down from `startRemaining` at `addDate`.
+      // Values are aligned to the burndown chart's existing label grid so the line
+      // renders on its category x-axis; the line begins at the first label >= addDate.
+      function _drawWhatIfLine(fd, addDate, startRemaining) {
         if (!window.burndownChart) return;
-        const start   = new Date(fd.latestDate);
-        const endDate = new Date(fd.contractEndDate || start);
         const msPerWeek = 7 * 24 * 60 * 60 * 1000;
-        const totalWeeks = Math.ceil((endDate - start) / msPerWeek) + 1;
-        const pts = [];
-        for (let w = 0; w <= totalWeeks; w++) {
-          const d = new Date(start.getTime() + w * msPerWeek);
-          const y = startRemaining - fd.weeklyBurn * w;
-          pts.push({ x: d.toISOString().slice(0, 10), y: Math.max(0, y) });
-          if (y <= 0) break;
-        }
+        const labels  = window.burndownChart.data.labels || [];
+        const addStr  = (addDate instanceof Date ? addDate : new Date(addDate)).toISOString().slice(0, 10);
+        const endStr  = fd.contractEndDate || labels[labels.length - 1];
+
+        let depleted = false;
+        const pts = labels.map(l => {
+          if (l < addStr || (endStr && l > endStr) || depleted) return null;
+          const weeks = (new Date(l) - addDate) / msPerWeek;
+          const y = startRemaining - fd.weeklyBurn * weeks;
+          if (y <= 0) { depleted = true; return 0; }
+          return y;
+        });
         const ds = window.burndownChart.data.datasets;
         const existing = ds.findIndex(d => d._whatif);
         const dataset = {
@@ -1027,6 +1059,7 @@
           pointRadius: 0,
           tension: 0,
           fill: false,
+          spanGaps: false,
           order: -10,
         };
         if (existing >= 0) { ds[existing] = dataset; } else { ds.push(dataset); }

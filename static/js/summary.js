@@ -92,7 +92,7 @@
         }],
       },
       options: {
-        responsive: true,
+        responsive: true, maintainAspectRatio: false,
         plugins: {
           legend: { display: false },
           tooltip: { callbacks: {
@@ -141,7 +141,7 @@
                      backgroundColor: bgFor(curIc), borderRadius: 3 }],
       },
       options: {
-        responsive: true,
+        responsive: true, maintainAspectRatio: false,
         interaction: { mode: 'index', intersect: false },
         plugins: {
           legend: { display: false },
