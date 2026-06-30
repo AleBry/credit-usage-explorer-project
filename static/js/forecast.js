@@ -784,6 +784,11 @@ window.setBurndownColor = function(key, val) {
   const hoverPointRadius = () => currentGranularity === 'daily' ? 5 : 6;
   const pointHitRadius = () => currentGranularity === 'daily' ? 8 : 4;
   const activeActualPts = () => currentGranularity === 'daily' && dailyActualPts.length ? dailyActualPts : actualPts;
+  const isProjectionDataset = ds => ds && (
+    ds.label === 'Projected remaining' || ds._mcOverlay || ds._lrOverlay
+  );
+  const isLatestActualProjectionHover = item =>
+    latestDate && item.label === latestDate && isProjectionDataset(item.dataset);
 
   function buildAllLabels(ppts) {
     return [...new Set([...activeActualPts(), ...ppts].map(p => p[0]))].sort();
@@ -981,7 +986,7 @@ window.setBurndownColor = function(key, val) {
           // many overlays are active: drop empty points and the faint P10/P90
           // band lines (marked _noTooltip), then cap the visible rows.
           itemSort: (a, b) => (b.raw ?? -Infinity) - (a.raw ?? -Infinity),
-          filter: (item) => item.raw != null && !item.dataset._noTooltip,
+          filter: (item) => item.raw != null && !item.dataset._noTooltip && !isLatestActualProjectionHover(item),
           usePointStyle: true,
           boxWidth: 8,
           boxHeight: 8,
