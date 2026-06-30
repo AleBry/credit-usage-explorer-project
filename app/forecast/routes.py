@@ -8,6 +8,7 @@ import json
 from flask import Blueprint, Response, flash, jsonify, redirect, render_template, request, stream_with_context, url_for
 
 from app.shared.chart_data import usage_type_weekly_json
+from app.shared.credit_ledger import sync_credit_ledger
 from .models import PriceModel
 from .prediction import get_model
 from .service import ChartDataBuilder, ForecastingService
@@ -21,6 +22,48 @@ def create_forecast_blueprint(services) -> Blueprint:
 
     def _get_store_df():
         return store.data.df if store is not None else None
+
+    def _latest_data_date(*frames) -> _pd.Timestamp:
+        """Return the newest date actually present in the uploaded data."""
+        candidates: list[_pd.Timestamp] = []
+        for df, col in frames:
+            if df is None or df.empty or col not in df.columns:
+                continue
+            dates = _pd.to_datetime(df[col], errors="coerce").dropna()
+            if not dates.empty:
+                candidates.append(dates.max().normalize())
+        return max(candidates) if candidates else _pd.Timestamp("today").normalize()
+
+    def _daily_actual_burndown_json(df, contract_status: dict | None) -> str:
+        """Daily actual remaining points for the burndown chart."""
+        if df is None or df.empty or "date_partition" not in df.columns or "usage_credits" not in df.columns:
+            return "[]"
+        if not contract_status:
+            return "[]"
+
+        start = _pd.to_datetime(contract_status.get("contract_start_date"), errors="coerce")
+        end = _pd.to_datetime(contract_status.get("latest_usage_date"), errors="coerce")
+        purchased = float(contract_status.get("purchased_credits") or 0)
+        if _pd.isna(start) or _pd.isna(end) or purchased <= 0:
+            return "[]"
+
+        ddf = df[["date_partition", "usage_credits"]].copy()
+        ddf["_day"] = _pd.to_datetime(ddf["date_partition"], errors="coerce").dt.normalize()
+        ddf["usage_credits"] = _pd.to_numeric(ddf["usage_credits"], errors="coerce").fillna(0.0)
+        ddf = ddf.dropna(subset=["_day"])
+        ddf = ddf[(ddf["_day"] >= start.normalize()) & (ddf["_day"] <= end.normalize())]
+        if ddf.empty:
+            return "[]"
+
+        daily = ddf.groupby("_day", as_index=False)["usage_credits"].sum()
+        full_days = _pd.DataFrame({"_day": _pd.date_range(start.normalize(), end.normalize(), freq="D")})
+        daily = full_days.merge(daily, on="_day", how="left").fillna({"usage_credits": 0.0})
+        daily["remaining"] = (purchased - daily["usage_credits"].cumsum()).clip(lower=0.0)
+        rows = [
+            {"date": str(row["_day"].date()), "remaining": round(float(row["remaining"]), 2)}
+            for _, row in daily.iterrows()
+        ]
+        return json.dumps(rows)
 
     def _has_stat(row: dict, keys: tuple[str, ...]) -> bool:
         for key in keys:
@@ -78,14 +121,21 @@ def create_forecast_blueprint(services) -> Blueprint:
 
         forecasting = ForecastingService(config, hist_df, op_df, daily_fallback)
 
-        exclude_partial = request.args.get("exclude_partial") == "1"
+        granularity = request.args.get("granularity", "weekly")
+        if granularity not in {"weekly", "daily"}:
+            granularity = "weekly"
+        exclude_partial = granularity == "weekly"
+        data_as_of = _latest_data_date(
+            (daily_fallback_df, "date_partition"),
+            (op_df, "week_end"),
+            (hist_df, "period_end"),
+        )
+        forecasting._as_of = data_as_of
         if exclude_partial:
-            _today = _pd.Timestamp("today").normalize()
             if forecasting.operational_df is not None and not forecasting.operational_df.empty:
                 forecasting.operational_df = forecasting.operational_df[
-                    forecasting.operational_df["week_end"] < _today
+                    forecasting.operational_df["week_end"] <= data_as_of
                 ].copy()
-            forecasting._as_of = _today
 
         # Date window for burn-rate calculation (does not affect credits_remaining / weeks_remaining)
         data_from = request.args.get("data_from", "").strip() or None
@@ -109,6 +159,7 @@ def create_forecast_blueprint(services) -> Blueprint:
                 contract_status=None,
                 forecast=None,
                 weekly_chart_data="[]",
+                daily_actual_data="[]",
                 cumulative_chart_data="[]",
                 active_users_data="[]",
                 usage_type_weekly=usage_type_weekly,
@@ -117,6 +168,7 @@ def create_forecast_blueprint(services) -> Blueprint:
                 is_preview=False,
                 saved_contract=config_svc.load_contract(),
                 exclude_partial=exclude_partial,
+                granularity=granularity,
                 data_from=data_from,
                 data_to=data_to,
             )
@@ -130,6 +182,7 @@ def create_forecast_blueprint(services) -> Blueprint:
 
         chart_builder = ChartDataBuilder(forecasting, forecasting.historical_df, forecasting.operational_df)
         weekly_chart_data = chart_builder.weekly_burn_json()
+        daily_actual_data = _daily_actual_burndown_json(daily_fallback_df, contract_status)
         cumulative_chart_data = chart_builder.cumulative_burn_json()
         contract_start_str = str(contract_status.get("contract_start_date", ""))
         active_users_data = chart_builder.active_users_json(contract_start_str)
@@ -141,6 +194,7 @@ def create_forecast_blueprint(services) -> Blueprint:
             contract_status=contract_status,
             forecast=forecast_data,
             weekly_chart_data=weekly_chart_data,
+            daily_actual_data=daily_actual_data,
             cumulative_chart_data=cumulative_chart_data,
             active_users_data=active_users_data,
             usage_type_weekly=usage_type_weekly,
@@ -149,16 +203,17 @@ def create_forecast_blueprint(services) -> Blueprint:
             is_preview=is_preview,
             saved_contract=config_svc.load_contract(),
             exclude_partial=exclude_partial,
+            granularity=granularity,
             data_from=data_from,
             data_to=data_to,
         )
 
     @bp.route("/forecast", methods=["GET"])
     def forecast_page() -> str:
-        if "exclude_partial" not in request.args:
+        if "granularity" not in request.args:
             args = dict(request.args)
-            saved = request.cookies.get("forecast_excl_partial", "1")
-            args["exclude_partial"] = saved if saved in ("0", "1") else "1"
+            args["granularity"] = "weekly"
+            args.pop("exclude_partial", None)
             return redirect(url_for("forecast.forecast_page", **args))
         return _build_forecast_context("forecast.html")
 
@@ -172,6 +227,8 @@ def create_forecast_blueprint(services) -> Blueprint:
             contract["contract"]["contract_end_date"] = request.form.get("contract_end_date")
         if request.form.get("purchased_credits"):
             contract["contract"]["purchased_credits"] = float(request.form.get("purchased_credits"))
+        if request.form.get("purchased_credits_date"):
+            contract["contract"]["purchased_credits_date"] = request.form.get("purchased_credits_date")
         if request.form.get("rollover_allowed"):
             contract["contract"]["rollover_allowed"] = request.form.get("rollover_allowed") == "on"
         if request.form.get("current_price_per_credit"):
@@ -201,6 +258,7 @@ def create_forecast_blueprint(services) -> Blueprint:
             except (ValueError, TypeError):
                 pass
 
+        sync_credit_ledger(contract["contract"])
         config_svc.save_contract(contract)
         flash("Forecast config saved.", "success")
         next_page = request.form.get("next_page", "settings")
@@ -474,7 +532,10 @@ def create_forecast_blueprint(services) -> Blueprint:
     @bp.route("/forecast/model-data", methods=["GET"])
     def model_data() -> object:
         model_id = request.args.get("model", "monte_carlo")
-        exclude_partial = request.args.get("exclude_partial") == "1"
+        granularity = request.args.get("granularity", "weekly")
+        if granularity not in {"weekly", "daily"}:
+            granularity = "weekly"
+        exclude_partial = granularity == "weekly"
 
         config = config_svc.load_contract()
         cfg_runs = int(config.get("forecast", {}).get("monte_carlo_runs", 10000))
@@ -488,13 +549,17 @@ def create_forecast_blueprint(services) -> Blueprint:
         daily_fallback = daily_fallback_df if op_df is None else None
 
         svc = ForecastingService(config, hist_df, op_df, daily_fallback)
+        data_as_of = _latest_data_date(
+            (daily_fallback_df, "date_partition"),
+            (op_df, "week_end"),
+            (hist_df, "period_end"),
+        )
+        svc._as_of = data_as_of
         if exclude_partial:
-            _today = _pd.Timestamp("today").normalize()
             if svc.operational_df is not None and not svc.operational_df.empty:
                 svc.operational_df = svc.operational_df[
-                    svc.operational_df["week_end"] < _today
+                    svc.operational_df["week_end"] <= data_as_of
                 ].copy()
-            svc._as_of = _today
 
         data_from_mc = request.args.get("data_from", "").strip() or None
         data_to_mc   = request.args.get("data_to",   "").strip() or None

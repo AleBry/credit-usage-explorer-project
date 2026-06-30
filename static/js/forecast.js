@@ -611,29 +611,47 @@ function deleteSnapshot(btn, e) {
   }).catch(() => alert('Delete request failed.'));
 }
 
-// Restore snapshot selections active before an exclude-partial page reload
+// Capture snapshot selections active before a forecast page reload. The actual
+// restore waits until the burndown chart has rebuilt its daily/weekly labels.
+let pendingSnapRestoreKeys = [];
 (function () {
   const saved = sessionStorage.getItem('forecast-snap-keys');
   if (!saved) return;
   sessionStorage.removeItem('forecast-snap-keys');
   let keys;
   try { keys = JSON.parse(saved); } catch (_) { return; }
-  if (!keys.length) return;
-  document.querySelectorAll('.history-row').forEach(tr => {
-    try {
-      const snap = JSON.parse(tr.dataset.snap);
-      if (keys.includes(snapKey(snap))) toggleRow(tr);
-    } catch (_) {}
-  });
-  // Also restore from data map when no DOM rows
-  keys.forEach(key => {
-    if (!selectedSnaps.has(key) && SNAP_DATA_MAP[key]) {
-      selectedSnaps.set(key, SNAP_DATA_MAP[key]);
-      fetchSnapSeries(SNAP_DATA_MAP[key]);
-    }
-  });
-  if ([...selectedSnaps.keys()].some(k => keys.includes(k))) renderComparePanel();
+  pendingSnapRestoreKeys = Array.isArray(keys) ? keys.filter(Boolean) : [];
 })();
+
+function restorePendingSnapshotSelections() {
+  const keys = pendingSnapRestoreKeys;
+  pendingSnapRestoreKeys = [];
+  if (!keys.length) {
+    syncQuickSelect();
+    return;
+  }
+
+  keys.forEach(key => {
+    const row = findRowByKey(key);
+    let snap = SNAP_DATA_MAP[key] || null;
+    if (row) {
+      try { snap = JSON.parse(row.dataset.snap || '{}'); } catch (_) {}
+    }
+    if (!snap) return;
+
+    if (!selectedSnaps.has(key)) {
+      selectedSnaps.set(key, snap);
+    }
+    if (row) {
+      const idx = Math.max(0, [...selectedSnaps.keys()].indexOf(key));
+      row.style.background = SNAP_COLORS[idx % SNAP_COLORS.length] + '22';
+      const cb = row.querySelector('.history-cb');
+      if (cb) cb.checked = true;
+    }
+    fetchSnapSeries(snap);
+  });
+  renderComparePanel();
+}
 
 /* ===================================================================== *
  * Chart color helpers
@@ -699,21 +717,41 @@ window.setBurndownColor = function(key, val) {
 (function () {
   if (!document.getElementById('burndownChart')) return;
   const rawData    = D.weeklyChartData || [];
+  const dailyActualRaw = D.dailyActualData || [];
   const purchased  = D.purchased;
   const remaining  = D.remaining;
   const weeklyBurn = D.weeklyBurn;
   const weeksLeft  = D.weeksLeft;
   const latestDate = D.latestDate;
+  const contractStartDate = D.contractStartDate;
 
   const inContractRaw = rawData.filter(w => w.in_contract).sort((a,b) => a.week_start < b.week_start ? -1 : 1);
   let r = purchased;
-  const actualPts = inContractRaw.map(w => {
+  const actualRawPts = inContractRaw.map(w => {
     r = Math.max(r - w.total_credits_used, 0);
     const d = new Date((w.week_end || w.week_start) + 'T12:00:00');
     d.setDate(d.getDate() + 1);
-    return [d.toISOString().slice(0, 10), r];
+    const pointDate = d.toISOString().slice(0, 10);
+    return [pointDate > latestDate ? latestDate : pointDate, r];
   });
-  actualPts.push([latestDate, remaining]);
+  const actualPts = [];
+  if (contractStartDate && (!latestDate || contractStartDate <= latestDate)) {
+    actualPts.push([contractStartDate, purchased]);
+  }
+  actualRawPts.forEach(pt => {
+    if (actualPts.length && actualPts[actualPts.length - 1][0] === pt[0]) {
+      actualPts[actualPts.length - 1] = pt;
+    } else {
+      actualPts.push(pt);
+    }
+  });
+  if (!actualPts.length || actualPts[actualPts.length - 1][0] !== latestDate) {
+    actualPts.push([latestDate, remaining]);
+  }
+  const dailyActualPts = dailyActualRaw
+    .filter(d => d && d.date)
+    .map(d => [d.date, Number(d.remaining)])
+    .filter(p => Number.isFinite(p[1]));
 
   function buildProjPts(granularity) {
     const pts = [[latestDate, remaining]];
@@ -738,13 +776,152 @@ window.setBurndownColor = function(key, val) {
     return pts;
   }
 
-  let currentGranularity = localStorage.getItem('fc-gran') || 'weekly';
+  let currentGranularity = D.granularity || 'weekly';
   let projPts = buildProjPts(currentGranularity);
 
   const lookup = (pts, lbl) => { const p = pts.find(x => x[0] === lbl); return p != null ? p[1] : null; };
+  const visiblePointRadius = () => 0;
+  const hoverPointRadius = () => currentGranularity === 'daily' ? 5 : 6;
+  const pointHitRadius = () => currentGranularity === 'daily' ? 8 : 4;
+  const activeActualPts = () => currentGranularity === 'daily' && dailyActualPts.length ? dailyActualPts : actualPts;
 
   function buildAllLabels(ppts) {
-    return [...new Set([...actualPts, ...ppts].map(p => p[0]))].sort();
+    return [...new Set([...activeActualPts(), ...ppts].map(p => p[0]))].sort();
+  }
+
+  function formatBurndownTickLabel(value, index, ticks) {
+    const label = this.getLabelForValue(value);
+    if (!label) return '';
+    const dt = new Date(label + 'T00:00:00');
+    if (Number.isNaN(dt.getTime())) return label;
+    return `${dt.getMonth() + 1}/${dt.getDate()}`;
+  }
+
+  function applyBurndownXAxisStyle(chart, granularity) {
+    if (!chart || !chart.options || !chart.options.scales || !chart.options.scales.x) return;
+    chart.options.scales.x.ticks.maxRotation = 45;
+    chart.options.scales.x.ticks.minRotation = 0;
+    chart.options.scales.x.ticks.maxTicksLimit = granularity === 'daily' ? 16 : 14;
+    chart.options.scales.x.ticks.autoSkip = true;
+  }
+
+  function viewStorageKey(name) {
+    return `forecast-chart-view-${currentGranularity}-${name}`;
+  }
+
+  function getNearestLabel(value, direction) {
+    if (!value || !allLabels.length) return null;
+    if (direction === 'start') return allLabels.find(l => l >= value) || allLabels[allLabels.length - 1];
+    return [...allLabels].reverse().find(l => l <= value) || allLabels[0];
+  }
+
+  function labelIndex(label) {
+    const idx = allLabels.indexOf(label);
+    return idx >= 0 ? idx : null;
+  }
+
+  function applyAxisWindow(min, max) {
+    const bc = window.burndownChart;
+    if (!bc) return;
+    const scale = bc.chart.options.scales.x;
+    scale.min = min;
+    scale.max = max;
+    bc.chart.update('none');
+  }
+
+  function defaultViewRange() {
+    const min = getNearestLabel(D.contractStartDate || allLabels[0], 'start') || allLabels[0];
+    return { min, max: allLabels[allLabels.length - 1] };
+  }
+
+  function setViewInputBounds() {
+    const fromEl = document.getElementById('chart-view-from');
+    const toEl = document.getElementById('chart-view-to');
+    if (!fromEl || !toEl || !allLabels.length) return;
+    [fromEl, toEl].forEach(el => {
+      el.min = allLabels[0];
+      el.max = allLabels[allLabels.length - 1];
+    });
+  }
+
+  window.applyBurndownViewRange = function(persist = true) {
+    const bc = window.burndownChart;
+    const fromEl = document.getElementById('chart-view-from');
+    const toEl = document.getElementById('chart-view-to');
+    if (!bc || !fromEl || !toEl || !allLabels.length) return;
+    const from = fromEl.value || '';
+    const to = toEl.value || '';
+    if (!from && !to) {
+      const def = defaultViewRange();
+      fromEl.value = def.min;
+      toEl.value = def.max;
+      applyAxisWindow(def.min, def.max);
+      return;
+    }
+    const min = getNearestLabel(from, 'start') || allLabels[0];
+    const max = getNearestLabel(to, 'end') || allLabels[allLabels.length - 1];
+    if (min > max) {
+      alert('Choose a view start date before the end date.');
+      return;
+    }
+    if (persist) {
+      if (from) localStorage.setItem(viewStorageKey('from'), from); else localStorage.removeItem(viewStorageKey('from'));
+      if (to) localStorage.setItem(viewStorageKey('to'), to); else localStorage.removeItem(viewStorageKey('to'));
+    }
+    applyAxisWindow(min, max);
+  };
+
+  window.shiftBurndownViewWindow = function(direction) {
+    const bc = window.burndownChart;
+    const fromEl = document.getElementById('chart-view-from');
+    const toEl = document.getElementById('chart-view-to');
+    if (!bc || !fromEl || !toEl || !allLabels.length) return;
+
+    const scale = bc.chart.options.scales.x;
+    const currentMin = typeof scale.min === 'string' ? scale.min : allLabels[0];
+    const currentMax = typeof scale.max === 'string' ? scale.max : allLabels[allLabels.length - 1];
+    const minIdx = labelIndex(getNearestLabel(fromEl.value || currentMin, 'start')) ?? 0;
+    const maxIdx = labelIndex(getNearestLabel(toEl.value || currentMax, 'end')) ?? allLabels.length - 1;
+    const width = Math.max(1, maxIdx - minIdx);
+    const step = Math.max(1, Math.round(width * 0.8)) * (direction < 0 ? -1 : 1);
+    let nextMinIdx = Math.max(0, Math.min(allLabels.length - 1 - width, minIdx + step));
+    let nextMaxIdx = nextMinIdx + width;
+    if (nextMaxIdx >= allLabels.length) {
+      nextMaxIdx = allLabels.length - 1;
+      nextMinIdx = Math.max(0, nextMaxIdx - width);
+    }
+
+    fromEl.value = allLabels[nextMinIdx];
+    toEl.value = allLabels[nextMaxIdx];
+    window.applyBurndownViewRange();
+  };
+
+  window.clearBurndownViewRange = function() {
+    const bc = window.burndownChart;
+    const fromEl = document.getElementById('chart-view-from');
+    const toEl = document.getElementById('chart-view-to');
+    localStorage.removeItem(viewStorageKey('from'));
+    localStorage.removeItem(viewStorageKey('to'));
+    if (!bc || !fromEl || !toEl || !allLabels.length) return;
+    const def = defaultViewRange();
+    fromEl.value = def.min;
+    toEl.value = def.max;
+    applyAxisWindow(def.min, def.max);
+  };
+
+  window.resetBurndownView = function() {
+    window.clearBurndownViewRange();
+  };
+
+  function initBurndownViewRange() {
+    const fromEl = document.getElementById('chart-view-from');
+    const toEl = document.getElementById('chart-view-to');
+    if (!fromEl || !toEl) return;
+    setViewInputBounds();
+    const def = defaultViewRange();
+    fromEl.value = localStorage.getItem(viewStorageKey('from')) || def.min;
+    toEl.value = localStorage.getItem(viewStorageKey('to')) || def.max;
+    window.applyBurndownViewRange(false);
   }
 
   let allLabels = buildAllLabels(projPts);
@@ -758,15 +935,15 @@ window.setBurndownColor = function(key, val) {
       datasets: [
         {
           label: 'Actual remaining',
-          data: allLabels.map(l => lookup(actualPts, l)),
+          data: allLabels.map(l => lookup(activeActualPts(), l)),
           borderColor: getChartColor('actual'), backgroundColor: hexToRgba(getChartColor('actual'), 0.07),
-          fill: true, tension: 0.1, pointRadius: 3, pointHoverRadius: 6, spanGaps: false,
+          fill: true, tension: 0.1, pointRadius: visiblePointRadius(), pointHoverRadius: hoverPointRadius(), pointHitRadius: pointHitRadius(), spanGaps: false,
         },
         {
           label: 'Projected remaining',
           data: allLabels.map(l => lookup(projPts, l)),
           borderColor: getChartColor('proj'), borderDash: [5, 4], backgroundColor: 'transparent',
-          tension: 0.05, pointRadius: 2, pointHoverRadius: 5, spanGaps: false,
+          tension: 0.05, pointRadius: visiblePointRadius(), pointHoverRadius: hoverPointRadius(), pointHitRadius: pointHitRadius(), spanGaps: false,
         },
       ],
     },
@@ -812,6 +989,7 @@ window.setBurndownColor = function(key, val) {
           titleFont: { size: 11 },
           maxWidth: 320,
           callbacks: {
+            title: items => items && items.length ? items[0].label : '',
             label: ctx => `  ${cleanLegendLabel(ctx.dataset.label)}: ${Math.round(ctx.raw ?? 0).toLocaleString()} credits`,
           },
         },
@@ -827,7 +1005,17 @@ window.setBurndownColor = function(key, val) {
           ticks: { callback: v => v >= 1000000 ? (v/1000000).toFixed(1)+'M' : v >= 1000 ? (v/1000).toFixed(0)+'k' : v, font: { size: 10 } },
           grid: { color: 'rgba(0,0,0,.05)' },
         },
-        x: { ticks: { maxRotation: 40, maxTicksLimit: 14, font: { size: 10 } }, grid: { display: false } },
+        x: {
+          ticks: {
+            maxRotation: 45,
+            minRotation: 0,
+            maxTicksLimit: currentGranularity === 'daily' ? 16 : 14,
+            autoSkip: true,
+            callback: formatBurndownTickLabel,
+            font: { size: 10 },
+          },
+          grid: { display: false },
+        },
       },
     },
   }, { exportName: 'Credit Burndown' });
@@ -850,32 +1038,24 @@ window.setBurndownColor = function(key, val) {
 
   window.setBurndownGranularity = function(gran) {
     if (gran === currentGranularity) return;
-    currentGranularity = gran;
     localStorage.setItem('fc-gran', gran);
-    projPts = buildProjPts(gran);
-    allLabels = buildAllLabels(projPts);
-    window.burndownLabels = allLabels;
-    const bc = window.burndownChart;
-    if (!bc) return;
-    bc.data.labels = allLabels;
-    bc.data.datasets.forEach(ds => {
-      if (ds._mcOverlay || ds._snapOverlay) return;
-      if (ds.label === 'Actual remaining')    ds.data = allLabels.map(l => lookup(actualPts, l));
-      if (ds.label === 'Projected remaining') ds.data = allLabels.map(l => lookup(projPts, l));
-    });
-    bc.update();
-    if (typeof updateBurndownOverlays === 'function') updateBurndownOverlays();
-    if (typeof window.refreshMcBands    === 'function') window.refreshMcBands();
-    if (typeof window.refreshLrOverlay  === 'function') window.refreshLrOverlay();
-    refreshBurndownLegend();
-    document.getElementById('gran-weekly').classList.toggle('active', gran === 'weekly');
-    document.getElementById('gran-daily').classList.toggle('active', gran === 'daily');
+    sessionStorage.setItem('forecast-scroll', window.scrollY);
+    if (typeof selectedSnaps !== 'undefined' && selectedSnaps.size > 0) {
+      sessionStorage.setItem('forecast-snap-keys', JSON.stringify([...selectedSnaps.keys()]));
+    }
+    const url = new URL(window.location.href);
+    url.searchParams.set('granularity', gran);
+    url.searchParams.delete('exclude_partial');
+    window.location.href = url.toString();
   };
 
   if (currentGranularity === 'daily') {
     document.getElementById('gran-weekly').classList.remove('active');
     document.getElementById('gran-daily').classList.add('active');
   }
+  applyBurndownXAxisStyle(window.burndownChart, currentGranularity);
+  initBurndownViewRange();
+  restorePendingSnapshotSelections();
 })();
 
 /* ===================================================================== *
@@ -962,7 +1142,7 @@ window.setBurndownColor = function(key, val) {
       label: 'Linear Trend (ML)', data: p50,
       borderColor: C, borderWidth: 2, borderDash: [6, 3],
       backgroundColor: 'transparent', fill: false, tension: 0.1,
-      pointRadius: 0, pointHoverRadius: 4, spanGaps: false, _lrOverlay: true,
+      pointRadius: 0, pointHoverRadius: 5, pointHitRadius: D.granularity === 'daily' ? 8 : 4, spanGaps: false, _lrOverlay: true,
     });
     bc.update();
     refreshBurndownLegend();
@@ -1157,7 +1337,7 @@ window.setBurndownColor = function(key, val) {
         data: p50data,
         borderColor: '#fd7e14', borderWidth: 2.5, borderDash: [6, 3],
         backgroundColor: 'transparent', fill: false,
-        pointRadius: 0, pointHoverRadius: 4, tension: 0.1, spanGaps: false,
+        pointRadius: 0, pointHoverRadius: 5, pointHitRadius: D.granularity === 'daily' ? 8 : 4, tension: 0.1, spanGaps: false,
         _mcOverlay: true, _mcBand: 'p50',
       });
     }
@@ -1411,25 +1591,12 @@ window.forecastUsageTypeChart = renderUsageTypeChart('forecastUsageTypeChart', D
 })();
 
 /* ===================================================================== *
- * Page-level handlers (exclude-partial, data window, inline rename)
+ * Page-level handlers (data window, inline rename)
  * ===================================================================== */
 (function () {
   const y = sessionStorage.getItem('forecast-scroll');
   if (y !== null) { sessionStorage.removeItem('forecast-scroll'); window.scrollTo(0, parseInt(y, 10)); }
 })();
-
-function applyExcludePartial(checked) {
-  sessionStorage.setItem('forecast-scroll', window.scrollY);
-  if (typeof selectedSnaps !== 'undefined' && selectedSnaps.size > 0) {
-    sessionStorage.setItem('forecast-snap-keys', JSON.stringify([...selectedSnaps.keys()]));
-  } else {
-    sessionStorage.removeItem('forecast-snap-keys');
-  }
-  document.cookie = 'forecast_excl_partial=' + (checked ? '1' : '0') + '; path=/; max-age=31536000; SameSite=Lax';
-  const url = new URL(window.location.href);
-  url.searchParams.set('exclude_partial', checked ? '1' : '0');
-  window.location.href = url.toString();
-}
 
 function applyDataWindow() {
   const from = document.getElementById('data-from').value;

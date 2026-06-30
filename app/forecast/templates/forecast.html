@@ -497,7 +497,7 @@
     <div class="forecast-summary-card">
       <div class="summary-label">Credit Position</div>
       <div class="summary-main">{{ "{:,.0f}".format(cs.credits_remaining) }}</div>
-      <div class="summary-sub">remaining of {{ "{:,.0f}".format(cs.purchased_credits) }} purchased</div>
+      <div class="summary-sub">remaining of {{ "{:,.0f}".format(cs.purchased_credits) }} credits available</div>
       <div class="summary-metrics">
         <div class="summary-metric"><span>Used</span><strong>{{ "{:,.0f}".format(cs.total_credits_used) }}</strong></div>
         <div class="summary-metric"><span>End balance</span><strong class="{{ 'text-danger' if fc.forecast_contract_end_balance < 0 else 'text-success' }}">{{ "{:+,.0f}".format(fc.forecast_contract_end_balance) }}</strong></div>
@@ -548,16 +548,9 @@
       <div class="forecast-mini-legend">
         <span><span class="forecast-dot bg-primary"></span>Used</span>
         <span><span class="forecast-dot bg-{{ bar_color }} opacity-75"></span>Projected remaining usage</span>
-        <span class="text-muted">Purchased: {{ "{:,.0f}".format(cs.purchased_credits) }}</span>
+        <span class="text-muted">Available: {{ "{:,.0f}".format(cs.purchased_credits) }}</span>
       </div>
       <div class="forecast-usage-actions">
-        <label class="form-check-label d-flex align-items-center gap-1 mb-0" style="cursor:pointer;"
-               title="Exclude the current, still-in-progress week from the burn-rate calculation. On by default since a partial week understates the weekly burn.">
-          <input type="checkbox" class="form-check-input mb-0" id="exclude-partial-chk"
-                 {% if exclude_partial %}checked{% endif %}
-                 onchange="applyExcludePartial(this.checked)">
-          Include partial week
-        </label>
       </div>
     </div>
     <details class="forecast-whatif-details" id="whatif-wrap">
@@ -589,13 +582,13 @@
       </div>
       <div class="chart-toolbar forecast-toolbar">
         <div class="btn-group btn-group-sm me-1" role="group" title="Projection granularity">
-          <button id="gran-weekly" class="btn btn-outline-secondary py-0 px-2 active" onclick="setBurndownGranularity('weekly')">Weekly</button>
-          <button id="gran-daily"  class="btn btn-outline-secondary py-0 px-2"        onclick="setBurndownGranularity('daily')">Daily</button>
+          <button id="gran-weekly" class="btn btn-outline-secondary py-0 px-2 {% if granularity == 'weekly' %}active{% endif %}" onclick="setBurndownGranularity('weekly')">Weekly</button>
+          <button id="gran-daily"  class="btn btn-outline-secondary py-0 px-2 {% if granularity == 'daily' %}active{% endif %}" onclick="setBurndownGranularity('daily')">Daily</button>
         </div>
         <div class="btn-group btn-group-sm" role="group">
           <button class="btn btn-outline-secondary py-0 px-2" title="Zoom in"  onclick="window.burndownChart && window.burndownChart.zoom(1.25)">+</button>
           <button class="btn btn-outline-secondary py-0 px-2" title="Zoom out" onclick="window.burndownChart && window.burndownChart.zoom(0.8)">&minus;</button>
-          <button class="btn btn-outline-secondary py-0 px-2" title="Reset"    onclick="window.burndownChart && window.burndownChart.resetZoom()">&#8635;</button>
+          <button class="btn btn-outline-secondary py-0 px-2" title="Reset"    onclick="resetBurndownView()">&#8635;</button>
         </div>
         <button class="btn btn-outline-secondary btn-sm py-0 px-2" title="Export PNG"  onclick="window.burndownChart && window.burndownChart.exportPNG()">&#8681;</button>
         <button class="btn btn-outline-secondary btn-sm py-0 px-2" title="Fullscreen"  onclick="window.burndownChart && window.burndownChart.openFullscreen()">&#9974;</button>
@@ -624,6 +617,17 @@
           <input type="checkbox" id="legend-on-chart" onchange="toggleChartLegend(this.checked)">
           <span>Legend on chart</span>
         </label>
+
+        <div class="d-flex align-items-end flex-wrap gap-1 ms-md-2" style="font-size:.72rem;">
+          <span class="fc-control-label align-self-center me-1">X-axis</span>
+          <input type="date" id="chart-view-from" class="form-control form-control-sm" style="width:132px;" onchange="applyBurndownViewRange()">
+          <span class="text-muted align-self-center">to</span>
+          <input type="date" id="chart-view-to" class="form-control form-control-sm" style="width:132px;" onchange="applyBurndownViewRange()">
+          <button class="btn btn-outline-secondary btn-sm py-0 px-2" title="Shift x-axis window earlier" onclick="shiftBurndownViewWindow(-1)">&lsaquo;</button>
+          <button class="btn btn-outline-secondary btn-sm py-0 px-2" title="Shift x-axis window later" onclick="shiftBurndownViewWindow(1)">&rsaquo;</button>
+          <button class="btn btn-outline-secondary btn-sm py-0 px-2" onclick="applyBurndownViewRange()">Apply</button>
+          <button class="btn btn-link btn-sm p-0 text-muted" style="font-size:.72rem;" onclick="clearBurndownViewRange()">Clear</button>
+        </div>
 
         <details class="fc-native-details fc-colors-details ms-auto" {% if data_from or data_to %}open{% endif %}>
           <summary>Advanced settings{% if data_from or data_to %} &middot; burn window active{% endif %}</summary>
@@ -672,7 +676,7 @@
                 <button class="btn btn-primary btn-sm" onclick="applyDataWindow()">Apply</button>
                 {% if data_from or data_to %}
                 <a class="btn btn-outline-secondary btn-sm"
-                   href="{{ url_for('forecast.forecast_page') }}?exclude_partial={{ '1' if exclude_partial else '0' }}">Clear</a>
+                   href="{{ url_for('forecast.forecast_page') }}?granularity={{ granularity }}">Clear</a>
                 <form method="post" action="{{ url_for('forecast.save_forecast_snapshot') }}" class="d-flex align-items-end gap-2">
                   <input type="hidden" name="next_page" value="forecast">
                   <input type="hidden" name="data_from" value="{{ data_from or '' }}">
@@ -754,12 +758,13 @@
             <div class="col-md-4">
               <p class="text-muted small mb-1 fw-semibold">Period</p>
               <p class="mb-1">{{ cs.contract_start_date }} → {{ cs.contract_end_date }}</p>
+              <p class="text-muted small mb-0">Initial allocation on: {{ saved_contract.contract.purchased_credits_date or cs.contract_start_date }}</p>
               <p class="text-muted small mb-0">Latest data: {{ cs.latest_usage_date }}</p>
             </div>
             <div class="col-md-4">
               <p class="text-muted small mb-1 fw-semibold">Credits</p>
               <table class="table table-sm mb-0">
-                <tr><td>Purchased</td><td class="text-end fw-semibold">{{ "{:,.0f}".format(cs.purchased_credits) }}</td></tr>
+                <tr><td>Available</td><td class="text-end fw-semibold">{{ "{:,.0f}".format(cs.purchased_credits) }}</td></tr>
                 <tr><td>Used</td><td class="text-end">{{ "{:,.0f}".format(cs.total_credits_used) }}</td></tr>
                 <tr><td>Remaining</td><td class="text-end text-success fw-semibold">{{ "{:,.0f}".format(cs.credits_remaining) }}</td></tr>
               </table>
@@ -913,7 +918,9 @@
   <script type="application/json" id="forecast-data">
   {
     "noData": {{ 'true' if no_data else 'false' }},
+    "granularity": "{{ granularity }}",
     "weeklyChartData": {{ weekly_chart_data | safe }},
+    "dailyActualData": {{ daily_actual_data | safe }},
     "activeUsers": {{ active_users_data | safe }},
     "cumulative": {{ cumulative_chart_data | safe }},
     "usageType": {{ usage_type_weekly | safe }},
@@ -921,6 +928,7 @@
     "remaining": {{ forecast.credits_remaining if not no_data else 0 }},
     "weeklyBurn": {{ forecast.forecast_weekly_burn if not no_data else 0 }},
     "weeksLeft": {{ forecast.weeks_remaining if not no_data else 0 }},
+    "contractStartDate": "{{ contract_status.contract_start_date if not no_data else '' }}",
     "latestDate": "{{ contract_status.latest_usage_date if not no_data else '' }}",
     "currentRemaining": {{ contract_status.credits_remaining if not no_data else 0 }},
     "contractEndDate": "{{ contract_status.contract_end_date if not no_data else '' }}",

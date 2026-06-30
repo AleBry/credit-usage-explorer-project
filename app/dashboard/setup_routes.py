@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from flask import flash, redirect, render_template, request, session, url_for
 
+from app.shared.credit_ledger import build_credit_entry, sync_credit_ledger
+
 
 def register_setup_routes(bp, services) -> None:
     store = services.store
@@ -29,10 +31,25 @@ def register_setup_routes(bp, services) -> None:
         data_.setdefault("contract", {})
         data_.setdefault("pricing", {})
         try:
-            data_["contract"]["contract_start_date"] = request.form.get("contract_start_date", "").strip()
+            contract_start_date = request.form.get("contract_start_date", "").strip()
+            purchased_credits = int(float(request.form.get("purchased_credits", 0) or 0))
+            data_["contract"]["contract_start_date"] = contract_start_date
             data_["contract"]["contract_end_date"] = request.form.get("contract_end_date", "").strip()
-            data_["contract"]["purchased_credits"] = int(float(request.form.get("purchased_credits", 0) or 0))
+            data_["contract"]["purchased_credits_date"] = (
+                request.form.get("purchased_credits_date", "").strip() or contract_start_date
+            )
             data_["contract"]["rollover_allowed"] = "rollover_allowed" in request.form
+            data_["contract"]["credit_entries"] = []
+            if purchased_credits > 0:
+                data_["contract"]["credit_entries"].append(
+                    build_credit_entry(
+                        date=contract_start_date,
+                        credits=purchased_credits,
+                        kind="purchased",
+                        notes="Initial allocation",
+                    )
+                )
+            sync_credit_ledger(data_["contract"])
             data_["pricing"]["current_price_per_credit"] = float(request.form.get("current_price_per_credit", 0) or 0)
             config_svc.save_contract(data_)
             flash("Contract configuration saved.", "success")

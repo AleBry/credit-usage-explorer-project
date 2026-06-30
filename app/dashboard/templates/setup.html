@@ -34,9 +34,10 @@
                      value="{{ contract.contract_end_date or '' }}" required>
             </div>
             <div class="col-md-6">
-              <label class="form-label">Purchased credits</label>
+              <label class="form-label">Credits available</label>
               <input class="form-control form-control-sm" type="number" name="purchased_credits"
                      value="{{ contract.purchased_credits or '' }}" min="0" step="1" required>
+              <div class="form-text">This creates the first ledger entry, dated to your contract start.</div>
             </div>
             <div class="col-md-6">
               <label class="form-label">Price per credit ($)</label>

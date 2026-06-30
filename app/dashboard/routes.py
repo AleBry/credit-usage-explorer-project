@@ -15,6 +15,7 @@ from app.shared.data_store import CreditUsageData
 from .service import (
     compute_active_users_weekly,
     compute_summary_metrics,
+    compute_daily_trend,
     compute_weekly_trend,
 )
 from .setup_routes import register_setup_routes
@@ -56,6 +57,7 @@ def create_dashboard_blueprint(services) -> Blueprint:
             contract_start_str = ""
 
         weekly_trend = compute_weekly_trend(df, contract_start_str)
+        daily_trend = compute_daily_trend(df, contract_start_str)
         # All three Summary charts share one raw-frame week grouping + contract
         # split, so they always cover the same weeks (no straddling-week gap).
         active_users_data = compute_active_users_weekly(df, contract_start_str)
@@ -86,6 +88,7 @@ def create_dashboard_blueprint(services) -> Blueprint:
             "summary.html",
             metrics=metrics,
             weekly_trend=weekly_trend,
+            daily_trend=daily_trend,
             usage_type_weekly=usage_type_weekly_json(df, contract_start=contract_start_str),
             forecast_snapshot=forecast_snapshot,
             pipeline_status=ps,

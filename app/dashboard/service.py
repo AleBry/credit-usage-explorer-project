@@ -65,6 +65,41 @@ def compute_weekly_trend(df: pd.DataFrame, contract_start: str = "") -> str:
     ])
 
 
+def compute_daily_trend(df: pd.DataFrame, contract_start: str = "") -> str:
+    """Daily credits burned, filled across the full date span."""
+    if "date_partition" not in df.columns or "usage_credits" not in df.columns:
+        return "[]"
+
+    ddf = df[["date_partition", "usage_credits", "email"]].copy()
+    ddf["_date"] = pd.to_datetime(ddf["date_partition"], errors="coerce")
+    ddf = ddf.dropna(subset=["_date"])
+    if ddf.empty:
+        return "[]"
+    ddf["_day"] = ddf["_date"].dt.normalize()
+
+    daily = (
+        ddf.groupby("_day", as_index=False)
+        .agg(total_credits=("usage_credits", "sum"), unique_users=("email", "nunique"))
+        .sort_values("_day")
+        .rename(columns={"_day": "day"})
+    )
+
+    full_days = pd.DataFrame({"day": pd.date_range(daily["day"].min(), daily["day"].max(), freq="D")})
+    daily = full_days.merge(daily, on="day", how="left").fillna({"total_credits": 0.0, "unique_users": 0})
+
+    cstart = pd.to_datetime(contract_start, errors="coerce")
+    cstart = None if pd.isna(cstart) else cstart
+    return json.dumps([
+        {
+            "day": str(row["day"].date()),
+            "total_credits": round(float(row["total_credits"]), 2),
+            "unique_users": int(row["unique_users"]),
+            "in_contract": bool(cstart is None or row["day"] >= cstart),
+        }
+        for _, row in daily.iterrows()
+    ])
+
+
 def compute_active_users_weekly(df: pd.DataFrame, contract_start: str = "") -> str:
     """Active users (distinct emails with credits > 0) per Monday-anchored week.
 

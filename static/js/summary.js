@@ -68,25 +68,77 @@
 
   // ===== Weekly credit burn =====
   (function initWeekly() {
-    const raw = D.weeklyTrend || [];
-    if (!raw.length) { emptyMsg('weeklyChart', 'No date data available to plot.'); return; }
+    const series = {
+      weekly: D.weeklyTrend || [],
+      daily: D.dailyTrend || [],
+    };
+    if (!series.weekly.length && !series.daily.length) {
+      emptyMsg('weeklyChart', 'No date data available to plot.');
+      return;
+    }
 
     // Pre-contract weeks render gray (matching the Active Users chart).
     const IN_BG = 'rgba(13,110,253,0.65)', IN_BD = 'rgba(13,110,253,1)';
     const PRE_BG = 'rgba(108,117,125,0.45)', PRE_BD = 'rgba(108,117,125,0.85)';
     const bgFor = rows => rows.map(d => (d.in_contract ? IN_BG : PRE_BG));
     const bdFor = rows => rows.map(d => (d.in_contract ? IN_BD : PRE_BD));
-    let curIc = raw.map(d => d.in_contract);
+    const titleEl = document.getElementById('burn-chart-title');
+    const weeklyBtn = document.getElementById('wb-gran-weekly');
+    const dailyBtn = document.getElementById('wb-gran-daily');
+    const weeksSel = document.getElementById('wb-weeks-filter');
+    const scopeSel = document.getElementById('wb-scope-filter');
+    const rangeOptions = Array.from(weeksSel ? weeksSel.options : []);
+    let currentMode = series.weekly.length ? 'weekly' : 'daily';
+    let currentRows = series[currentMode];
+    let curIc = currentRows.map(d => d.in_contract);
+
+    function modeConfig(mode) {
+      return mode === 'daily'
+        ? {
+            rows: series.daily,
+            labelKey: 'day',
+            title: 'Daily Credit Burn',
+            exportName: 'Daily Credit Burn',
+            unit: 'days',
+            labelPrefix: 'Day of ',
+          }
+        : {
+            rows: series.weekly,
+            labelKey: 'week',
+            title: 'Weekly Credit Burn',
+            exportName: 'Weekly Credit Burn',
+            unit: 'wks',
+            labelPrefix: 'Week of ',
+          };
+    }
+
+    function refreshRangeLabels() {
+      if (!weeksSel || rangeOptions.length === 0) return;
+      const cfg = modeConfig(currentMode);
+      rangeOptions[0].text = `All ${currentMode === 'daily' ? 'days' : 'weeks'}`;
+      [4, 8, 12, 26].forEach((n, idx) => {
+        if (rangeOptions[idx + 1]) rangeOptions[idx + 1].text = `Last ${n} ${cfg.unit}`;
+      });
+    }
+
+    function refreshGranularityUI() {
+      const cfg = modeConfig(currentMode);
+      if (titleEl) titleEl.textContent = cfg.title;
+      if (weeklyBtn) weeklyBtn.classList.toggle('active', currentMode === 'weekly');
+      if (dailyBtn) dailyBtn.classList.toggle('active', currentMode === 'daily');
+      if (window.summaryWeeklyChart) window.summaryWeeklyChart.exportName = cfg.exportName;
+      refreshRangeLabels();
+    }
 
     window.summaryWeeklyChart = new BNLChart('weeklyChart', {
       type: 'bar',
       data: {
-        labels: raw.map(d => d.week),
+        labels: currentRows.map(d => d[modeConfig(currentMode).labelKey]),
         datasets: [{
           label: 'Credits used',
-          data: raw.map(d => d.total_credits),
-          backgroundColor: bgFor(raw),
-          borderColor: bdFor(raw),
+          data: currentRows.map(d => d.total_credits),
+          backgroundColor: bgFor(currentRows),
+          borderColor: bdFor(currentRows),
           borderWidth: 1,
           borderRadius: 3,
         }],
@@ -96,31 +148,49 @@
         plugins: {
           legend: { display: false },
           tooltip: { callbacks: {
+            title: items => (modeConfig(currentMode).labelPrefix + items[0].label),
             footer: items => (curIc[items[0].dataIndex] ? '' : 'Pre-contract'),
           } },
         },
         scales: {
           y: { beginAtZero: true, ticks: { callback: v => v.toLocaleString() } },
-          x: { ticks: { maxRotation: 45, font: { size: 10 } } },
+          x: { ticks: { maxRotation: 45, font: { size: 10 }, maxTicksLimit: 16 } },
         },
       },
     }, { exportName: 'Weekly Credit Burn' });
 
-    const weeksSel = document.getElementById('wb-weeks-filter');
-    const scopeSel = document.getElementById('wb-scope-filter');
     function apply() {
-      let rows = raw;
+      const cfg = modeConfig(currentMode);
+      let rows = cfg.rows;
       if (scopeSel && scopeSel.value === 'contract') rows = rows.filter(d => d.in_contract);
       rows = lastN(rows, weeksOf(weeksSel));
+      currentRows = rows;
       curIc = rows.map(d => d.in_contract);
       const c = window.summaryWeeklyChart.chart;
-      c.data.labels = rows.map(d => d.week);
+      c.data.labels = rows.map(d => d[cfg.labelKey]);
       c.data.datasets[0].data = rows.map(d => d.total_credits);
       c.data.datasets[0].backgroundColor = bgFor(rows);
       c.data.datasets[0].borderColor = bdFor(rows);
       c.update();
     }
+
+    window.setSummaryBurnGranularity = function (mode, btn) {
+      if (!series[mode] || mode === currentMode) return;
+      currentMode = mode;
+      refreshGranularityUI();
+      apply();
+      if (btn && btn.parentElement) {
+        Array.from(btn.parentElement.querySelectorAll('button')).forEach(b => {
+          b.classList.toggle('active', b === btn);
+        });
+      }
+    };
+
     [weeksSel, scopeSel].forEach(s => s && s.addEventListener('change', apply));
+    refreshGranularityUI();
+    apply();
+    if (!series.daily.length && dailyBtn) dailyBtn.disabled = true;
+    if (!series.weekly.length && weeklyBtn) weeklyBtn.disabled = true;
   })();
 
   // ===== Active users per week =====

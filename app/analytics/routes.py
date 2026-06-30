@@ -248,7 +248,9 @@ def create_analytics_blueprint(services) -> Blueprint:
             view = "cards"
         name_query = request.args.get("name_query", "").strip()
         email_query = request.args.get("email_query", "").strip()
-        date_field = request.args.get("date_field", "")
+        # Default to the canonical usage date so a plain date-range search works
+        # without forcing the user to choose a field first.
+        date_field = request.args.get("date_field", "date_partition")
         start_date = request.args.get("start_date", "")
         end_date = request.args.get("end_date", "")
         top_n = int(request.args.get("top_n", 50))

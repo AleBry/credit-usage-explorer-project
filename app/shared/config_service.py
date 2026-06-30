@@ -7,6 +7,7 @@ from pathlib import Path
 import yaml
 
 from .alert_rules import DEFAULT_ALERT_RULES, AlertRule
+from .credit_ledger import credit_entries_total, normalize_credit_entries
 
 # Used when no contract_config.yaml exists yet (fresh install / setup wizard).
 DEFAULT_CONTRACT_CONFIG: dict = {
@@ -14,6 +15,8 @@ DEFAULT_CONTRACT_CONFIG: dict = {
         "contract_start_date": "",
         "contract_end_date": "",
         "purchased_credits": 0,
+        "purchased_credits_date": "",
+        "credit_entries": [],
         "rollover_allowed": False,
     },
     "pricing": {
@@ -55,8 +58,11 @@ class AppConfig:
         """True only when the contract has real dates + purchased credits set."""
         try:
             c = self.load_contract().get("contract", {})
+            available = float(c.get("purchased_credits") or 0)
+            if available <= 0:
+                available = credit_entries_total(normalize_credit_entries(c))
             return bool(c.get("contract_start_date")) and bool(c.get("contract_end_date")) \
-                and float(c.get("purchased_credits") or 0) > 0
+                and available > 0
         except Exception:
             return False
 

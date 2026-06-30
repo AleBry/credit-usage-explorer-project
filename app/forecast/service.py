@@ -175,17 +175,20 @@ class ForecastingService:
         total_credits_used = historical_credits_used + operational_credits_used
         credits_remaining = purchased_credits - total_credits_used
 
-        # latest_usage_date = first day after the last data week ends.
-        # week_end / period_end are stored as the last inclusive day of the week,
-        # so +1 day gives the exclusive boundary where projections begin.
+        # latest_usage_date is the first day after the last completed data week.
+        # Week-ending dates are stored as the last inclusive day of the week, so
+        # +1 day gives the exclusive boundary where projections begin.
+        #
+        # _as_of caps the date at the freshest uploaded data so the UI never
+        # jumps past what is actually present in the dataset.
         dates: list[pd.Timestamp] = []
         if self.historical_df is not None and not self.historical_df.empty:
             dates.append(self.historical_df["period_end"].max() + pd.Timedelta(days=1))
         if self.operational_df is not None and not self.operational_df.empty:
             dates.append(self.operational_df["week_end"].max() + pd.Timedelta(days=1))
         latest_usage_date = max(dates) if dates else contract_start
-        if self._as_of is not None and self._as_of > latest_usage_date:
-            latest_usage_date = self._as_of
+        if self._as_of is not None:
+            latest_usage_date = min(latest_usage_date, self._as_of)
 
         total_contract_days = (contract_end - contract_start).days
         elapsed_days = max((latest_usage_date - contract_start).days, 0)

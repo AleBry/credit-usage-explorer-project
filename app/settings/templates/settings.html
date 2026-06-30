@@ -243,8 +243,22 @@
               <input class="form-control form-control-sm" type="date" name="contract_end_date" value="{{ c.contract_end_date }}" required>
             </div>
             <div class="col-md-3">
-              <label class="form-label">Purchased credits</label>
-              <input class="form-control form-control-sm" type="number" name="purchased_credits" value="{{ c.purchased_credits }}" min="0" required>
+              <label class="form-label">Initial allocation date</label>
+              <input class="form-control form-control-sm" type="date" name="purchased_credits_date"
+                     value="{{ c.purchased_credits_date or c.contract_start_date or '' }}"
+                     {% if credit_entries %}readonly{% endif %}>
+              <div class="form-text">
+                {% if credit_entries %}
+                  This date is locked once ledger entries exist.
+                {% else %}
+                  Used for the original ledger entry. Later top-ups live in the log below.
+                {% endif %}
+              </div>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Credits available</label>
+              <input class="form-control form-control-sm" type="text" value="{{ '{:,.0f}'.format(credit_total) }}" readonly>
+              <div class="form-text">This is the sum of every entry in the credit ledger.</div>
             </div>
             <div class="col-md-3 d-flex align-items-end pb-1">
               <div class="form-check">
@@ -252,6 +266,88 @@
                 <label class="form-check-label" for="rollover_allowed">Rollover allowed</label>
               </div>
             </div>
+          </div>
+
+          <div class="alert alert-light border py-2 px-3 mb-3">
+            <div class="row g-2 small">
+              <div class="col-md-4">
+                <strong>Credits available:</strong> +{{ '{:,.0f}'.format(credit_total) }}
+              </div>
+              <div class="col-md-4">
+                <strong>Credits used:</strong>
+                {% if credit_status is not none %}{{ '{:,.0f}'.format(credit_status.total_credits_used) }}{% else %}—{% endif %}
+              </div>
+              <div class="col-md-4">
+                <strong>Remaining:</strong>
+                {% if credit_status is not none %}{{ '{:,.0f}'.format(credit_status.credits_remaining) }}{% else %}—{% endif %}
+              </div>
+            </div>
+          </div>
+
+          <p class="text-uppercase fw-bold text-muted mb-2 mt-3" style="font-size:.63rem; letter-spacing:.08em;">Credit ledger</p>
+          <div class="border rounded-3 p-3 bg-light mb-3">
+            <div class="row g-3 align-items-end">
+              <div class="col-md-2">
+                <label class="form-label">Date</label>
+                <input class="form-control form-control-sm" type="date" name="credits_date" required>
+              </div>
+              <div class="col-md-2">
+                <label class="form-label">Credits +</label>
+                <input class="form-control form-control-sm" type="number" name="credits" min="0" step="0.01" placeholder="100" required>
+              </div>
+              <div class="col-md-3">
+                <label class="form-label">Type</label>
+                <select class="form-select form-select-sm" name="credit_kind">
+                  <option value="purchased">Purchased</option>
+                  <option value="gifted">Gifted / grace</option>
+                  <option value="adjustment">Adjustment</option>
+                </select>
+              </div>
+              <div class="col-md-4">
+                <label class="form-label">Notes</label>
+                <input class="form-control form-control-sm" type="text" name="credits_notes" placeholder="e.g. gifted credits from vendor">
+              </div>
+              <div class="col-md-1 d-grid">
+                <button class="btn btn-outline-primary btn-sm" type="submit"
+                        formaction="{{ url_for('settings.add_credit_entry') }}"
+                        formmethod="post"
+                        formnovalidate>Add</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="table-responsive mb-2">
+            <table class="settings-table">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Type</th>
+                  <th class="text-end">Credits</th>
+                  <th>Notes</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% if credit_entries %}
+                  {% set credit_badges = {'purchased': 'bg-success', 'gifted': 'bg-info text-dark', 'adjustment': 'bg-secondary'} %}
+                  {% for entry in credit_entries %}
+                  <tr>
+                    <td>{{ entry.date or '—' }}</td>
+                    <td>
+                      <span class="badge {{ credit_badges.get(entry.kind, 'bg-secondary') }}" style="font-size:.68rem;">{{ credit_kind_label(entry.kind) }}</span>
+                    </td>
+                    <td class="text-end text-success fw-semibold">+{{ '{:,.0f}'.format(entry.credits) }}</td>
+                    <td style="max-width: 420px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ entry.notes or '' }}">
+                      {{ entry.notes or '—' }}
+                    </td>
+                  </tr>
+                  {% endfor %}
+                {% else %}
+                  <tr>
+                    <td colspan="4" class="text-muted small">No credit entries yet.</td>
+                  </tr>
+                {% endif %}
+              </tbody>
+            </table>
           </div>
 
           <p class="text-uppercase fw-bold text-muted mb-1 mt-1" style="font-size:.63rem; letter-spacing:.08em;">Pricing</p>
@@ -507,4 +603,3 @@
       }
     </script>
 {% endblock %}
-

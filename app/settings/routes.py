@@ -7,6 +7,13 @@ from pathlib import Path
 from flask import Blueprint, flash, redirect, render_template, request, send_file, url_for
 from werkzeug.utils import secure_filename
 
+from app.shared.credit_ledger import (
+    build_credit_entry,
+    credit_entries_total,
+    credit_kind_label,
+    normalize_credit_entries,
+    sync_credit_ledger,
+)
 from app.shared.ingestion import _infer_week_from_filename
 from .service import force_rmtree, try_snapshot
 
@@ -23,6 +30,22 @@ def create_settings_blueprint(services) -> Blueprint:
     @bp.route("", methods=["GET"])
     def settings_page() -> str:
         saved_contract = config_svc.load_contract()
+        credit_entries = normalize_credit_entries(saved_contract.get("contract", {}))
+        credit_total = credit_entries_total(credit_entries)
+        saved_contract.setdefault("contract", {})
+        saved_contract["contract"]["credit_entries"] = credit_entries
+        saved_contract["contract"]["purchased_credits"] = credit_total
+
+        credit_status = None
+        try:
+            from app.forecast.service import ForecastingService
+
+            svc = ForecastingService(saved_contract, pipeline.get_historical_weekly_summary(), pipeline.get_operational_weekly_summary(), store.data.df)
+            if svc.has_data():
+                credit_status = svc.get_contract_status()
+        except Exception:
+            credit_status = None
+
         tiers = config_svc.load_tiers()
         pipeline_status = pipeline.status()
         ingested_weeks = pipeline.get_ingested_weeks()
@@ -31,6 +54,10 @@ def create_settings_blueprint(services) -> Blueprint:
         return render_template(
             "settings.html",
             saved_contract=saved_contract,
+            credit_entries=credit_entries,
+            credit_total=credit_total,
+            credit_status=credit_status,
+            credit_kind_label=credit_kind_label,
             tiers=tiers,
             pipeline_status=pipeline_status,
             ingested_weeks=ingested_weeks,
@@ -60,12 +87,14 @@ def create_settings_blueprint(services) -> Blueprint:
                 auto_weight_schedule.append(row)
 
             data = config_svc.load_contract()
-            data["contract"] = {
+            data.setdefault("contract", {})
+            data["contract"].update({
                 "contract_start_date": request.form.get("contract_start_date", ""),
                 "contract_end_date": request.form.get("contract_end_date", ""),
-                "purchased_credits": int(float(request.form.get("purchased_credits", 0))),
+                "purchased_credits_date": request.form.get("purchased_credits_date", "").strip()
+                    or request.form.get("contract_start_date", "").strip(),
                 "rollover_allowed": "rollover_allowed" in request.form,
-            }
+            })
             data["pricing"] = {
                 "current_price_per_credit": float(request.form.get("pricing_current", 0)),
                 "next_contract_price_per_credit": float(request.form.get("pricing_next", 0)),
@@ -79,10 +108,41 @@ def create_settings_blueprint(services) -> Blueprint:
                 "monte_carlo_runs": int(request.form.get("monte_carlo_runs", 10000)),
                 "auto_weight_schedule": auto_weight_schedule,
             }
+            sync_credit_ledger(data["contract"])
             config_svc.save_contract(data)
             flash("Contract configuration saved.", "success")
         except Exception as exc:
             flash(f"Error saving contract config: {exc}", "danger")
+        return redirect(url_for("settings.settings_page"))
+
+    @bp.route("/credits/add", methods=["POST"])
+    def add_credit_entry() -> object:
+        try:
+            amount = float(request.form.get("credits", 0) or 0)
+            if amount <= 0:
+                flash("Enter a credit amount greater than zero.", "warning")
+                return redirect(url_for("settings.settings_page"))
+
+            data = config_svc.load_contract()
+            contract = data.setdefault("contract", {})
+            entries = normalize_credit_entries(contract)
+            entries.append(
+                build_credit_entry(
+                    date=request.form.get("credits_date", "").strip()
+                    or request.form.get("purchased_credits_date", "").strip()
+                    or request.form.get("contract_start_date", "").strip()
+                    or contract.get("contract_start_date", ""),
+                    credits=amount,
+                    kind=request.form.get("credit_kind", "purchased"),
+                    notes=request.form.get("credits_notes", "").strip(),
+                )
+            )
+            contract["credit_entries"] = entries
+            sync_credit_ledger(contract)
+            config_svc.save_contract(data)
+            flash("Credit entry added.", "success")
+        except Exception as exc:
+            flash(f"Error adding credit entry: {exc}", "danger")
         return redirect(url_for("settings.settings_page"))
 
     @bp.route("/tiers", methods=["POST"])

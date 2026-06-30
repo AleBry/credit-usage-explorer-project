@@ -76,8 +76,14 @@
       <!-- Weekly Trend Chart -->
       <div class="dash-section">
         <div class="dash-section-header">
-          <span class="dash-section-title">Weekly Credit Burn</span>
+          <span class="dash-section-title" id="burn-chart-title">Weekly Credit Burn</span>
           <div class="d-flex gap-1 align-items-center">
+            <div class="btn-group btn-group-sm" role="group" aria-label="Burn granularity">
+              <button type="button" class="btn btn-outline-secondary py-0 px-2 active"
+                      id="wb-gran-weekly" onclick="setSummaryBurnGranularity('weekly', this)">Weekly</button>
+              <button type="button" class="btn btn-outline-secondary py-0 px-2"
+                      id="wb-gran-daily" onclick="setSummaryBurnGranularity('daily', this)">Daily</button>
+            </div>
             {{ scope_select('wb-scope-filter') }}
             {{ weeks_select('wb-weeks-filter') }}
             <button class="btn btn-outline-secondary btn-sm py-0 px-2" title="Export PNG"  onclick="window.summaryWeeklyChart && window.summaryWeeklyChart.exportPNG()">&#8681;</button>
@@ -204,6 +210,7 @@
     {
       "usageType":   {{ usage_type_weekly | safe }},
       "weeklyTrend": {{ weekly_trend | safe }},
+      "dailyTrend":  {{ daily_trend | safe }},
       "activeUsers": {{ active_users_data | safe }}
     }
   </script>
