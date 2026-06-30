@@ -16,9 +16,17 @@ from .service import Leaderboards
 def create_analytics_blueprint(services) -> Blueprint:
     store = services.store
     bp = Blueprint("analytics", __name__, template_folder="templates", url_prefix="")
+    max_result_limit = 10_000
 
     def data() -> CreditUsageData:
         return store.data
+
+    def result_limit(name: str, default: int, min_value: int = 1) -> int:
+        try:
+            value = int(request.args.get(name, default) or default)
+        except (TypeError, ValueError):
+            return default
+        return max(min_value, min(value, max_result_limit))
 
     @bp.route("/leaderboard", methods=["GET"])
     def leaderboard_page() -> str:
@@ -28,7 +36,7 @@ def create_analytics_blueprint(services) -> Blueprint:
         model_filter = request.args.get("model_filter", "")
         start_date = request.args.get("start_date", "")
         end_date = request.args.get("end_date", "")
-        top_n = int(request.args.get("top_n", 25))
+        top_n = result_limit("top_n", 25, 5)
         min_credits = request.args.get("min_credits", "").strip()
         max_credits = request.args.get("max_credits", "").strip()
         zero_credits = request.args.get("zero_credits", "")
@@ -82,6 +90,7 @@ def create_analytics_blueprint(services) -> Blueprint:
             start_date=start_date,
             end_date=end_date,
             top_n=top_n,
+            max_result_limit=max_result_limit,
             all_usage_types=all_usage_types,
             all_models=all_models,
             lb_users=lb_users,
@@ -253,7 +262,7 @@ def create_analytics_blueprint(services) -> Blueprint:
         date_field = request.args.get("date_field", "date_partition")
         start_date = request.args.get("start_date", "")
         end_date = request.args.get("end_date", "")
-        top_n = int(request.args.get("top_n", 50))
+        top_n = result_limit("top_n", 50)
         min_credits = request.args.get("min_credits", "").strip()
         max_credits = request.args.get("max_credits", "").strip()
         zero_credits = request.args.get("zero_credits", "")
@@ -294,6 +303,7 @@ def create_analytics_blueprint(services) -> Blueprint:
                 df, metric, credit_threshold, lookback_days,
                 start_date=start_date, end_date=end_date,
                 usage_type_filter=adv_usage_type, model_filter=adv_model,
+                top_n=top_n,
             )
         else:
             if date_field and (start_date or end_date):
@@ -351,6 +361,7 @@ def create_analytics_blueprint(services) -> Blueprint:
             start_date=start_date,
             end_date=end_date,
             top_n=top_n,
+            max_result_limit=max_result_limit,
             users=user_list,
             min_credits=min_credits,
             max_credits=max_credits,
@@ -385,6 +396,7 @@ def create_analytics_blueprint(services) -> Blueprint:
             metric = "per_user_window"
         credit_threshold = float(request.args.get("credit_threshold", 100) or 100)
         lookback_days = int(request.args.get("lookback_days", 7) or 7)
+        top_n = result_limit("top_n", 200)
         adv_usage_type = request.args.get("usage_type_filter", "").strip()
         adv_model = request.args.get("model_filter", "").strip()
         start_date = request.args.get("start_date", "")
@@ -400,6 +412,7 @@ def create_analytics_blueprint(services) -> Blueprint:
             df, metric, credit_threshold, lookback_days,
             start_date=start_date, end_date=end_date,
             usage_type_filter=adv_usage_type, model_filter=adv_model,
+            top_n=top_n,
         )
 
         # Labeled DataFrame in the view's column order.

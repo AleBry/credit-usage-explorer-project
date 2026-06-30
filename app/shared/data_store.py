@@ -5,6 +5,7 @@ from typing import Any
 
 import pandas as pd
 
+from .data_filters import apply_usage_corrections
 from .utils import parse_usage_type
 
 
@@ -65,6 +66,10 @@ class CreditUsageData:
         self.df["usage_type_date"] = parsed.apply(lambda x: x["date"])
         self.df["usage_type_medium"] = parsed.apply(lambda x: x["medium"])
         self.df["usage_type_io"] = parsed.apply(lambda x: x["io"])
+
+        # View-only correction: this DataFrame is loaded for the app, not
+        # written back to the uploaded/current data sheet.
+        apply_usage_corrections(self.df)
 
         for col in ["usage_type_parsed_type", "usage_type_model", "usage_type_date",
                     "usage_type_medium", "usage_type_io"]:

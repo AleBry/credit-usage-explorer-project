@@ -86,6 +86,15 @@
               </select>
             </div>
           </div>
+          <div class="row g-2 align-items-end mt-1">
+            <div class="col-md-2">
+              <label class="form-label">Max results</label>
+              <input class="form-control form-control-sm" type="number" name="top_n" value="{{ top_n }}" min="1" max="{{ max_result_limit }}" title="Show up to {{ '{:,}'.format(max_result_limit) }} results">
+            </div>
+            <div class="col-md-10">
+              <div class="muted-help">Raise this when you want to inspect more than the default set.</div>
+            </div>
+          </div>
         </div>
       </form>
 
@@ -100,7 +109,7 @@
              href="{{ url_for('analytics.export_outliers', name_query=name_query, email_query=email_query,
                metric=metric, credit_threshold=credit_threshold|int, lookback_days=lookback_days,
                usage_type_filter=usage_type_filter, model_filter=model_filter,
-               start_date=start_date, end_date=end_date) }}"
+               start_date=start_date, end_date=end_date, top_n=top_n) }}"
              title="Download these outliers as an Excel sheet">&#8681; Export to Excel</a>
           {% endif %}
         </div>
@@ -137,7 +146,7 @@
             </div>
             <div class="col-md-1">
               <label class="form-label">Top</label>
-              <input class="form-control form-control-sm" name="top_n" value="{{ top_n }}" type="number" min="1" max="200">
+              <input class="form-control form-control-sm" name="top_n" value="{{ top_n }}" type="number" min="1" max="{{ max_result_limit }}" title="Show up to {{ '{:,}'.format(max_result_limit) }} users">
             </div>
             <div class="col-md-1">
               <label class="form-label">&nbsp;</label>

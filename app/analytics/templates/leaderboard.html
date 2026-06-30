@@ -48,7 +48,7 @@
 
             <div class="col-md-1">
               <label class="form-label">Top No.</label>
-              <input class="form-control form-control-sm" type="number" name="top_n" value="{{ top_n }}" min="5" max="200">
+              <input class="form-control form-control-sm" type="number" name="top_n" value="{{ top_n }}" min="5" max="{{ max_result_limit }}" title="Show up to {{ '{:,}'.format(max_result_limit) }} rows per board">
             </div>
 
             <div class="col-md-1">
