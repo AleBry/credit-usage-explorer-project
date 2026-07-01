@@ -19,7 +19,7 @@
         <div class="row g-4 align-items-start">
 
           <!-- Left: identity + stat numbers -->
-          <div class="col-md-4">
+          <div class="col-md-5">
             <div class="user-name-hero">{{ name or email or 'User' }}</div>
 
             {% if email and email != name %}
@@ -35,57 +35,75 @@
             <div class="user-detail"><span class="label">Public ID:</span> {{ public_id }}</div>
             {% endif %}
 
-            <div class="row g-2 mt-2">
-              <div class="col-6">
-                <div class="stat-card">
-                  <div class="stat-label">Records</div>
-                  <div class="stat-value" style="font-size:1.35rem;">{{ '{:,}'.format(rows) }}</div>
+            <div class="row g-2 mt-2 align-items-stretch">
+              <div class="col-7">
+                <div class="row g-2">
+                  <div class="col-6">
+                    <div class="stat-card">
+                      <div class="stat-label">Records</div>
+                      <div class="stat-value" style="font-size:1.35rem;">{{ '{:,}'.format(rows) }}</div>
+                    </div>
+                  </div>
+                  <div class="col-6">
+                    <div class="stat-card">
+                      <div class="stat-label">Credits</div>
+                      <div class="stat-value" style="font-size:1.35rem;">{{ '{:,.0f}'.format(total_credits) }}</div>
+                    </div>
+                  </div>
+                  <div class="col-6">
+                    <div class="stat-card">
+                      <div class="stat-label">Tokens</div>
+                      <div class="stat-value" style="font-size:1.35rem;">{{ '{:,.0f}'.format(totals_by_unit.get('tokens', 0.0)) }}</div>
+                    </div>
+                  </div>
+                  <div class="col-6">
+                    <div class="stat-card">
+                      <div class="stat-label">Counts</div>
+                      <div class="stat-value" style="font-size:1.35rem;">{{ '{:,.0f}'.format(totals_by_unit.get('counts', 0.0)) }}</div>
+                    </div>
+                  </div>
                 </div>
               </div>
-              <div class="col-6">
-                <div class="stat-card">
-                  <div class="stat-label">Credits</div>
-                  <div class="stat-value" style="font-size:1.35rem;">{{ '{:,.0f}'.format(total_credits) }}</div>
-                </div>
-              </div>
-              <div class="col-6">
-                <div class="stat-card">
-                  <div class="stat-label">Tokens</div>
-                  <div class="stat-value" style="font-size:1.35rem;">{{ '{:,.0f}'.format(totals_by_unit.get('tokens', 0.0)) }}</div>
-                </div>
-              </div>
-              <div class="col-6">
-                <div class="stat-card">
-                  <div class="stat-label">Counts</div>
-                  <div class="stat-value" style="font-size:1.35rem;">{{ '{:,.0f}'.format(totals_by_unit.get('counts', 0.0)) }}</div>
-                </div>
-              </div>
-            </div>
-
-            <div class="stat-card mt-2">
-              <div class="d-flex justify-content-between align-items-start gap-2">
-                <div>
-                  <div class="stat-label">Optimization Action</div>
+              <div class="col-5">
+                <div class="stat-card h-100">
+                  <div class="d-flex justify-content-between align-items-center gap-2 mb-1">
+                    <div class="stat-label mb-0">Optimization Action</div>
+                    <button class="btn btn-outline-primary btn-sm py-0 px-1 flex-shrink-0" type="button"
+                            title="View optimization" aria-label="View optimization"
+                            onclick="document.getElementById('optimization-tab').click()">
+                      <svg width="13" height="13" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true">
+                        <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/>
+                        <path d="M8 13A5 5 0 1 1 8 3a5 5 0 0 1 0 10zm0 1A6 6 0 1 0 8 2a6 6 0 0 0 0 12z"/>
+                        <path d="M8 11a3 3 0 1 1 0-6 3 3 0 0 1 0 6zm0 1A4 4 0 1 0 8 4a4 4 0 0 0 0 8z"/>
+                        <path d="M9.5 8a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0z"/>
+                      </svg>
+                    </button>
+                  </div>
                   {% if optimization_user %}
-                  <div class="stat-value" style="font-size:1rem;">{{ optimization_user.recommended_action | fmt_status }}</div>
-                  <div class="text-muted small mt-1">
-                    {{ optimization_user.review_priority }} &middot;
-                    {{ optimization_user.latest_governance_tier }} &rarr; {{ optimization_user.recommended_tier }}
+                  <div class="d-flex flex-column h-100">
+                    <div>
+                      <div class="stat-value" style="font-size:1rem;">{{ optimization_user.recommended_action | fmt_status }}</div>
+                      <div class="text-muted small mt-1">
+                        {{ optimization_user.review_priority }}<br>
+                        {{ optimization_user.latest_governance_tier }} &rarr; {{ optimization_user.recommended_tier }}
+                      </div>
+                    </div>
                   </div>
                   {% else %}
-                  <div class="stat-value" style="font-size:1rem;">No Recommendation</div>
-                  <div class="text-muted small mt-1">No matching optimization row</div>
+                  <div class="d-flex flex-column h-100">
+                    <div>
+                      <div class="stat-value" style="font-size:1rem;">No Recommendation</div>
+                      <div class="text-muted small mt-1">No matching optimization row</div>
+                    </div>
+                  </div>
                   {% endif %}
                 </div>
-                <button class="btn btn-outline-primary btn-sm" type="button" onclick="document.getElementById('optimization-tab').click()">
-                  Details
-                </button>
               </div>
             </div>
           </div>
 
           <!-- Middle: credits by usage type per week (stacked) -->
-          <div class="col-md-4">
+          <div class="col-md-3">
             <div class="d-flex justify-content-between align-items-center mb-1">
               <div class="hero-chart-label mb-0">Credits by type / week</div>
               <div class="d-flex gap-1">
