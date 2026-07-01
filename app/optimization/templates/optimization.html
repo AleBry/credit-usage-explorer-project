@@ -211,7 +211,12 @@
           {% for r in recommendations %}
           <tr>
             <td>
-              <div class="fw-semibold">{{ r.latest_name or r.email }}</div>
+              <a class="fw-semibold text-decoration-none" href="{{ url_for('analytics.user_summary',
+                  name=r.latest_name or '',
+                  email=r.email or '',
+                  date_field='date_partition',
+                  active_tab='optimization'
+                ) }}">{{ r.latest_name or r.email }}</a>
               <div class="text-muted small">{{ r.email }}</div>
             </td>
             <td>{{ r.latest_governance_tier }}</td>
@@ -245,4 +250,3 @@
   });
 </script>
 {% endblock %}
-
