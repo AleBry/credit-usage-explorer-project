@@ -1,31 +1,34 @@
 from __future__ import annotations
 
-import pandas as pd
-from flask import Blueprint, render_template, request
+from datetime import date
+from io import StringIO
+import re
 
-from app.shared.csv_export import csv_response
+import pandas as pd
+from flask import Blueprint, Response, render_template, request
+
 from .service import build_optimization_result
 
 
 def create_optimization_blueprint(services) -> Blueprint:
-    pipeline = services.pipeline
-    config_svc = services.config_svc
     store = services.store
+    config_svc = services.config_svc
     bp = Blueprint("optimization", __name__, template_folder="templates", url_prefix="")
 
     def _result():
-        return build_optimization_result(
-            pipeline.processed_dir,
-            store.data.df,
-            config_svc.load_tiers(),
-        )
+        return build_optimization_result(store.data.df, config_svc.load_tiers())
+
+    def _slug(value: object, max_chars: int = 36) -> str:
+        text = str(value or "").strip().lower()
+        text = re.sub(r"[^a-z0-9]+", "-", text).strip("-")
+        return text[:max_chars].strip("-")
 
     def _range_label(min_value: str, max_value: str) -> str:
         min_value = str(min_value or "").strip()
         max_value = str(max_value or "").strip()
         if not min_value and not max_value:
             return ""
-        return f"{min_value or '0'}_to_{max_value or 'max'}"
+        return f"{min_value or '0'}-to-{max_value or 'max'}"
 
     def _filter_recommendations(result):
         state = {
@@ -70,81 +73,67 @@ def create_optimization_blueprint(services) -> Blueprint:
             val = pd.to_numeric(state[key], errors="coerce")
             if pd.isna(val):
                 continue
-            if key.startswith("min"):
-                df = df[pd.to_numeric(df[col], errors="coerce") >= float(val)]
-            else:
-                df = df[pd.to_numeric(df[col], errors="coerce") <= float(val)]
+            series = pd.to_numeric(df[col], errors="coerce")
+            df = df[series >= float(val)] if key.startswith("min") else df[series <= float(val)]
 
         return df, state
+
+    def _csv_response(df: pd.DataFrame, name: str, filters: dict) -> Response:
+        parts = [name]
+        for key in ("q", "action", "priority", "current_tier", "recommended_tier"):
+            val = _slug(filters.get(key, ""))
+            if val:
+                parts.append(f"{_slug(key, 16)}-{val}")
+        util_range = _range_label(filters.get("min_util", ""), filters.get("max_util", ""))
+        credit_range = _range_label(filters.get("min_avg_credits", ""), filters.get("max_avg_credits", ""))
+        if util_range:
+            parts.append(f"util-{_slug(util_range)}")
+        if credit_range:
+            parts.append(f"avgcredits-{_slug(credit_range)}")
+        parts.append(date.today().isoformat())
+        filename = "_".join(parts)
+        if len(filename) > 145:
+            filename = f"{filename[:134].rstrip('-_')}_{date.today().isoformat()}"
+        bio = StringIO()
+        df.to_csv(bio, index=False)
+        return Response(
+            bio.getvalue(),
+            mimetype="text/csv; charset=utf-8",
+            headers={"Content-Disposition": f'attachment; filename="{filename}.csv"'},
+        )
 
     @bp.route("/optimization", methods=["GET"])
     def optimization_page() -> str:
         result = _result()
         recommendations, filters = _filter_recommendations(result)
 
-        actions = (
-            result.recommendations["recommended_action"].dropna().unique().tolist()
-            if not result.recommendations.empty and "recommended_action" in result.recommendations.columns else []
-        )
-        priorities = (
-            result.recommendations["review_priority"].dropna().unique().tolist()
-            if not result.recommendations.empty and "review_priority" in result.recommendations.columns else []
-        )
-        current_tiers = (
-            result.recommendations["latest_governance_tier"].dropna().unique().tolist()
-            if not result.recommendations.empty and "latest_governance_tier" in result.recommendations.columns else []
-        )
-        recommended_tiers = (
-            result.recommendations["recommended_tier"].dropna().unique().tolist()
-            if not result.recommendations.empty and "recommended_tier" in result.recommendations.columns else []
-        )
-
-        actionable = 0
-        if not result.recommendations.empty:
-            actionable = int(result.recommendations["review_priority"].isin(["URGENT", "ACTIONABLE"]).sum())
+        source = result.recommendations
+        actions = sorted(source["recommended_action"].dropna().unique().tolist()) if not source.empty else []
+        priorities = sorted(source["review_priority"].dropna().unique().tolist()) if not source.empty else []
+        current_tiers = sorted(source["latest_governance_tier"].dropna().unique().tolist()) if not source.empty else []
+        recommended_tiers = sorted(source["recommended_tier"].dropna().unique().tolist()) if not source.empty else []
+        actionable = int(source["review_priority"].isin(["ACTIONABLE"]).sum()) if not source.empty else 0
 
         return render_template(
             "optimization.html",
             result=result,
             recommendations=recommendations.head(250).to_dict(orient="records") if not recommendations.empty else [],
             recommendation_count=len(recommendations),
-            actions=sorted(actions),
-            priorities=sorted(priorities),
-            current_tiers=sorted(current_tiers),
-            recommended_tiers=sorted(recommended_tiers),
+            actions=actions,
+            priorities=priorities,
+            current_tiers=current_tiers,
+            recommended_tiers=recommended_tiers,
             filters=filters,
             actionable=actionable,
-            tier_summary=result.tier_summary.to_dict(orient="records") if not result.tier_summary.empty else [],
             rec_summary=result.recommendation_summary.to_dict(orient="records") if not result.recommendation_summary.empty else [],
+            tier_summary=result.tier_summary.to_dict(orient="records") if not result.tier_summary.empty else [],
         )
 
     @bp.route("/optimization/export.csv", methods=["GET"])
-    def optimization_export_csv() -> object:
+    def optimization_export_csv() -> Response:
         result = _result()
-        dataset = request.args.get("dataset", "recommendations")
-        frames = {
-            "recommendations": result.recommendations,
-            "user_week_history": result.user_week_history,
-            "tier_summary": result.tier_summary,
-            "recommendation_summary": result.recommendation_summary,
-        }
-        if dataset == "recommendations":
-            df, filter_state = _filter_recommendations(result)
-        else:
-            df = frames.get(dataset, result.recommendations)
-            filter_state = {}
-        if df is None or df.empty:
-            df = pd.DataFrame()
-        return csv_response(df, f"optimization_{dataset}.csv", filters=[
-            ("source", result.source_label),
-            ("dataset", dataset),
-            ("search", filter_state.get("q", "")),
-            ("action", filter_state.get("action", "")),
-            ("priority", filter_state.get("priority", "")),
-            ("current", filter_state.get("current_tier", "")),
-            ("recommended", filter_state.get("recommended_tier", "")),
-            ("util", _range_label(filter_state.get("min_util", ""), filter_state.get("max_util", ""))),
-            ("avgcredits", _range_label(filter_state.get("min_avg_credits", ""), filter_state.get("max_avg_credits", ""))),
-        ])
+        recommendations, filters = _filter_recommendations(result)
+        return _csv_response(recommendations, "optimization_recommendations", filters)
 
     return bp
+

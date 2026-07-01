@@ -4,7 +4,7 @@ import json
 from urllib.parse import urlencode
 
 import pandas as pd
-from flask import Blueprint, render_template, request
+from flask import Blueprint, current_app, render_template, request
 
 from app.shared.chart_data import usage_type_weekly_json
 from app.shared.csv_export import csv_response
@@ -15,7 +15,6 @@ from .service import Leaderboards
 
 def create_analytics_blueprint(services) -> Blueprint:
     store = services.store
-    pipeline = services.pipeline
     config_svc = services.config_svc
     bp = Blueprint("analytics", __name__, template_folder="templates", url_prefix="")
     max_result_limit = 10_000
@@ -387,7 +386,7 @@ def create_analytics_blueprint(services) -> Blueprint:
         try:
             from app.optimization.service import build_optimization_result
 
-            opt = build_optimization_result(pipeline.processed_dir, d.df, config_svc.load_tiers())
+            opt = build_optimization_result(d.df, config_svc.load_tiers())
             optimization_source = opt.source_label
             rec = opt.recommendations
             if rec is not None and not rec.empty:
@@ -404,8 +403,8 @@ def create_analytics_blueprint(services) -> Blueprint:
             if hist is not None and not hist.empty:
                 if email and "email" in hist.columns:
                     hist = hist[hist["email"].astype(str).str.lower() == email.lower()]
-                elif name and "name" in hist.columns:
-                    hist = hist[hist["name"].astype(str).str.contains(name, case=False, na=False, regex=False)]
+                elif name and "latest_name" in hist.columns:
+                    hist = hist[hist["latest_name"].astype(str).str.contains(name, case=False, na=False, regex=False)]
                 else:
                     hist = pd.DataFrame()
                 if not hist.empty:
@@ -419,6 +418,7 @@ def create_analytics_blueprint(services) -> Blueprint:
             optimization_user = None
             optimization_history = []
             optimization_source = ""
+        optimization_page_available = "optimization.optimization_page" in current_app.view_functions
 
         return render_template(
             "user_summary.html",
@@ -459,6 +459,7 @@ def create_analytics_blueprint(services) -> Blueprint:
             optimization_user=optimization_user,
             optimization_history=optimization_history,
             optimization_source=optimization_source,
+            optimization_page_available=optimization_page_available,
         )
 
     @bp.route("/user-cards", methods=["GET"])

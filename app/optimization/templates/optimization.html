@@ -6,59 +6,59 @@
   <div class="mb-4 d-flex justify-content-between align-items-end flex-wrap gap-2">
     <div>
       <h1 class="page-title">Optimization</h1>
-      <p class="page-subtitle">Cap pressure, concentration, and tier movement recommendations.</p>
+      <p class="page-subtitle">Review tier pressure, cap utilization, and recommended actions from current project records.</p>
     </div>
-    <div class="d-flex gap-2 flex-wrap">
-      <a class="btn btn-outline-success btn-sm" href="{{ url_for('optimization.optimization_export_csv', dataset='recommendations',
-          q=filters.q, action=filters.action, priority=filters.priority,
-          current_tier=filters.current_tier, recommended_tier=filters.recommended_tier,
-          min_util=filters.min_util, max_util=filters.max_util,
-          min_avg_credits=filters.min_avg_credits, max_avg_credits=filters.max_avg_credits) }}">Export recommendations</a>
-      <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('optimization.optimization_export_csv', dataset='user_week_history') }}">Export history</a>
-    </div>
+    <a class="btn btn-outline-success btn-sm" href="{{ url_for('optimization.optimization_export_csv',
+      q=filters.q, action=filters.action, priority=filters.priority,
+      current_tier=filters.current_tier, recommended_tier=filters.recommended_tier,
+      min_util=filters.min_util, max_util=filters.max_util,
+      min_avg_credits=filters.min_avg_credits, max_avg_credits=filters.max_avg_credits) }}">Export filtered CSV</a>
   </div>
 
   {% if not result.user_week_history.empty %}
   {% set s = result.latest_summary %}
   <div class="muted-help mb-3">
     Source: <strong>{{ result.source_label }}</strong>
-    {% if result.source_label == 'current project records' %}
-      <span class="field-badge ms-2">Baseline tier assumed</span>
-    {% endif %}
+    <span class="field-badge ms-2">Baseline tier assumed</span>
   </div>
 
-  <div class="optimization-kpi-grid">
-    <div class="optimization-kpi">
-      <div class="label">Cap Pressure Index</div>
-      <div class="value">{{ "{:.1f}".format(s.cap_pressure_index) }}</div>
-      <div class="sub">{{ s.pressure_level }} pressure, week {{ s.week_start }} to {{ s.week_end }}</div>
+  <div class="row g-3 mb-3">
+    <div class="col-md-3">
+      <div class="stat-card h-100">
+        <div class="stat-label">Latest Week Credits</div>
+        <div class="stat-value">{{ "{:,.0f}".format(s.total_credits_used) }}</div>
+        <div class="text-muted small mt-1">{{ s.week_start }} to {{ s.week_end }}</div>
+      </div>
     </div>
-    <div class="optimization-kpi">
-      <div class="label">Latest Week Credits</div>
-      <div class="value">{{ "{:,.0f}".format(s.total_credits_used) }}</div>
-      <div class="sub">{{ "{:,}".format(s.credit_active_users) }} credit-active users</div>
+    <div class="col-md-3">
+      <div class="stat-card h-100">
+        <div class="stat-label">Credit-Active Users</div>
+        <div class="stat-value">{{ "{:,}".format(s.credit_active_users) }}</div>
+        <div class="text-muted small mt-1">{{ "{:,}".format(s.users) }} users observed</div>
+      </div>
     </div>
-    <div class="optimization-kpi">
-      <div class="label">Users Near Cap</div>
-      <div class="value">{{ "{:,}".format(s.users_over_90_percent_cap) }}</div>
-      <div class="sub">{{ "{:,}".format(s.users_at_or_over_cap) }} at or over cap</div>
+    <div class="col-md-3">
+      <div class="stat-card h-100">
+        <div class="stat-label">Users Near Cap</div>
+        <div class="stat-value">{{ "{:,}".format(s.users_over_90_percent_cap) }}</div>
+        <div class="text-muted small mt-1">{{ "{:,}".format(s.users_at_or_over_cap) }} at or over cap</div>
+      </div>
     </div>
-    <div class="optimization-kpi">
-      <div class="label">Actionable Reviews</div>
-      <div class="value">{{ "{:,}".format(actionable) }}</div>
-      <div class="sub">{{ "{:.1%}".format(s.top_10_percent_consumption_share) }} of latest spend from top 10%</div>
+    <div class="col-md-3">
+      <div class="stat-card h-100">
+        <div class="stat-label">Actionable Reviews</div>
+        <div class="stat-value">{{ "{:,}".format(actionable) }}</div>
+        <div class="text-muted small mt-1">{{ "{:.1%}".format(s.top_10_percent_consumption_share) }} from top 10%</div>
+      </div>
     </div>
   </div>
 
   <div class="row g-3 mb-3">
     <div class="col-lg-7">
-      <div class="dash-section h-100">
-        <div class="dash-section-header">
-          <span class="dash-section-title">Recommendation Summary</span>
-          <a class="btn btn-outline-success btn-sm ms-auto" href="{{ url_for('optimization.optimization_export_csv', dataset='recommendation_summary') }}">Export CSV</a>
-        </div>
+      <div class="section-card h-100 mb-0">
+        <h5>Recommendation Summary</h5>
         <div class="table-responsive">
-          <table class="table table-sm mb-0">
+          <table class="table table-sm records-table mb-0">
             <thead>
               <tr>
                 <th>Action</th>
@@ -74,11 +74,11 @@
                 <td>{{ r.recommended_action | fmt_status }}</td>
                 <td>{{ r.review_priority }}</td>
                 <td class="text-end">{{ "{:,}".format(r.users) }}</td>
-                <td class="text-end">{{ "{:,.0f}".format(r.total_recommended_cap_change) }}</td>
+                <td class="text-end">{{ "{:+,.0f}".format(r.total_recommended_cap_change) }}</td>
                 <td class="text-end">{{ "{:.0%}".format(r.avg_latest_utilization) }}</td>
               </tr>
               {% else %}
-              <tr><td colspan="5" class="text-muted text-center py-3">No recommendations yet</td></tr>
+              <tr><td colspan="5" class="text-center text-muted py-3">No recommendations yet</td></tr>
               {% endfor %}
             </tbody>
           </table>
@@ -86,13 +86,10 @@
       </div>
     </div>
     <div class="col-lg-5">
-      <div class="dash-section h-100">
-        <div class="dash-section-header">
-          <span class="dash-section-title">Tier Summary</span>
-          <a class="btn btn-outline-success btn-sm ms-auto" href="{{ url_for('optimization.optimization_export_csv', dataset='tier_summary') }}">Export CSV</a>
-        </div>
+      <div class="section-card h-100 mb-0">
+        <h5>Tier Summary</h5>
         <div class="table-responsive">
-          <table class="table table-sm mb-0">
+          <table class="table table-sm records-table mb-0">
             <thead>
               <tr>
                 <th>Tier</th>
@@ -110,7 +107,7 @@
                 <td class="text-end">{{ "{:.0%}".format(t.avg_cap_utilization) }}</td>
               </tr>
               {% else %}
-              <tr><td colspan="4" class="text-muted text-center py-3">No tier rows yet</td></tr>
+              <tr><td colspan="4" class="text-center text-muted py-3">No tier data</td></tr>
               {% endfor %}
             </tbody>
           </table>
@@ -119,15 +116,15 @@
     </div>
   </div>
 
-  <form class="filter-card mb-3" method="get" action="{{ url_for('optimization.optimization_page') }}">
-    <div class="section-label">Search &amp; Filters</div>
+  <form class="section-card mb-3" method="get" action="{{ url_for('optimization.optimization_page') }}">
+    <h5>Search &amp; Filters</h5>
     <div class="row g-2 align-items-end">
       <div class="col-md-4">
-        <label class="form-label">User / department</label>
+        <label class="form-label tight">User / department</label>
         <input class="form-control form-control-sm" name="q" value="{{ filters.q }}" placeholder="Name, email, department">
       </div>
       <div class="col-md-3">
-        <label class="form-label">Action</label>
+        <label class="form-label tight">Action</label>
         <select class="form-select form-select-sm" name="action">
           <option value="">All actions</option>
           {% for a in actions %}
@@ -136,7 +133,7 @@
         </select>
       </div>
       <div class="col-md-3">
-        <label class="form-label">Priority</label>
+        <label class="form-label tight">Priority</label>
         <select class="form-select form-select-sm" name="priority">
           <option value="">All priorities</option>
           {% for p in priorities %}
@@ -150,16 +147,16 @@
     </div>
     <div class="row g-2 align-items-end mt-1">
       <div class="col-md-2">
-        <label class="form-label">Current tier</label>
+        <label class="form-label tight">Current tier</label>
         <select class="form-select form-select-sm" name="current_tier">
-          <option value="">All current tiers</option>
+          <option value="">All current</option>
           {% for t in current_tiers %}
           <option value="{{ t }}" {% if filters.current_tier == t %}selected{% endif %}>{{ t }}</option>
           {% endfor %}
         </select>
       </div>
       <div class="col-md-2">
-        <label class="form-label">Recommended tier</label>
+        <label class="form-label tight">Recommended tier</label>
         <select class="form-select form-select-sm" name="recommended_tier">
           <option value="">All recommended</option>
           {% for t in recommended_tiers %}
@@ -168,19 +165,19 @@
         </select>
       </div>
       <div class="col-md-2">
-        <label class="form-label">Min latest util.</label>
+        <label class="form-label tight">Min latest util.</label>
         <input class="form-control form-control-sm" type="number" step="0.01" name="min_util" value="{{ filters.min_util }}" placeholder="0.90">
       </div>
       <div class="col-md-2">
-        <label class="form-label">Max latest util.</label>
+        <label class="form-label tight">Max latest util.</label>
         <input class="form-control form-control-sm" type="number" step="0.01" name="max_util" value="{{ filters.max_util }}" placeholder="1.25">
       </div>
       <div class="col-md-2">
-        <label class="form-label">Min avg credits</label>
+        <label class="form-label tight">Min avg credits</label>
         <input class="form-control form-control-sm" type="number" step="any" name="min_avg_credits" value="{{ filters.min_avg_credits }}" placeholder="100">
       </div>
       <div class="col-md-2">
-        <label class="form-label">Max avg credits</label>
+        <label class="form-label tight">Max avg credits</label>
         <input class="form-control form-control-sm" type="number" step="any" name="max_avg_credits" value="{{ filters.max_avg_credits }}" placeholder="500">
       </div>
     </div>
@@ -190,20 +187,13 @@
     </div>
   </form>
 
-  <div class="results-card">
-    <div class="results-header">
-      <span class="title">Recommended Tier Actions</span>
-      <div class="d-flex gap-2 align-items-center">
-        <span class="count">Top {{ recommendations | length }} shown</span>
-        <a class="btn btn-outline-success btn-sm" href="{{ url_for('optimization.optimization_export_csv', dataset='recommendations',
-          q=filters.q, action=filters.action, priority=filters.priority,
-          current_tier=filters.current_tier, recommended_tier=filters.recommended_tier,
-          min_util=filters.min_util, max_util=filters.max_util,
-          min_avg_credits=filters.min_avg_credits, max_avg_credits=filters.max_avg_credits) }}">Export CSV</a>
-      </div>
+  <div class="section-card">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h5 class="mb-0">Recommended Tier Actions</h5>
+      <span class="badge bg-secondary">{{ "{:,}".format(recommendation_count) }}</span>
     </div>
-    <div class="table-scroll">
-      <table class="table table-sm table-hover records-table">
+    <div class="table-responsive" style="max-height:72vh; overflow:auto;">
+      <table class="table table-sm table-hover records-table mb-0">
         <thead>
           <tr>
             <th>User</th>
@@ -221,7 +211,12 @@
           {% for r in recommendations %}
           <tr>
             <td>
-              <div class="fw-semibold">{{ r.latest_name or r.email }}</div>
+              <a class="fw-semibold text-decoration-none" href="{{ url_for('analytics.user_summary',
+                  name=r.latest_name or '',
+                  email=r.email or '',
+                  date_field='date_partition',
+                  active_tab='optimization'
+                ) }}">{{ r.latest_name or r.email }}</a>
               <div class="text-muted small">{{ r.email }}</div>
             </td>
             <td>{{ r.latest_governance_tier }}</td>
@@ -241,8 +236,8 @@
     </div>
   </div>
   {% else %}
-  <div class="empty-state">
-    No optimization data available. Upload records for this project so weekly totals can be derived, or add a project weekly operational upload in Settings.
+  <div class="section-card">
+    <div class="text-muted">No optimization data is available yet. Upload records for this project so weekly totals can be derived.</div>
   </div>
   {% endif %}
 </div>
@@ -250,10 +245,7 @@
 
 {% block scripts %}
 <script>
-  document.querySelectorAll('select[name="action"], select[name="priority"]').forEach(function (el) {
-    el.addEventListener('change', function () { el.closest('form').submit(); });
-  });
-  document.querySelectorAll('select[name="current_tier"], select[name="recommended_tier"]').forEach(function (el) {
+  document.querySelectorAll('select[name="action"], select[name="priority"], select[name="current_tier"], select[name="recommended_tier"]').forEach(function (el) {
     el.addEventListener('change', function () { el.closest('form').submit(); });
   });
 </script>
