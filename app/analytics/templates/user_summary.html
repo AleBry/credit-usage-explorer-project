@@ -100,27 +100,6 @@
                 </div>
               </div>
             </div>
-
-            <div class="stat-card mt-2">
-              <div class="d-flex justify-content-between align-items-start gap-2">
-                <div>
-                  <div class="stat-label">Optimization Action</div>
-                  {% if optimization_user %}
-                  <div class="stat-value" style="font-size:1rem;">{{ optimization_user.recommended_action | fmt_status }}</div>
-                  <div class="text-muted small mt-1">
-                    {{ optimization_user.review_priority }} &middot;
-                    {{ optimization_user.latest_governance_tier }} &rarr; {{ optimization_user.recommended_tier }}
-                  </div>
-                  {% else %}
-                  <div class="stat-value" style="font-size:1rem;">No Recommendation</div>
-                  <div class="text-muted small mt-1">No matching optimization row</div>
-                  {% endif %}
-                </div>
-                <button class="btn btn-outline-primary btn-sm" type="button" onclick="document.getElementById('optimization-tab').click()">
-                  Details
-                </button>
-              </div>
-            </div>
           </div>
 
           <!-- Middle: credits by usage type per week (stacked) -->
