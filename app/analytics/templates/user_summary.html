@@ -141,7 +141,7 @@
 
         <!-- OVERVIEW TAB -->
         <div class="tab-pane fade {% if active_tab not in ['records', 'optimization'] %}show active{% endif %}" id="overview" role="tabpanel">
-          <div class="section-card">
+          <div class="section-card user-summary-filter-card">
             <h5>Filters</h5>
 
             <form method="get" action="{{ url_for('analytics.user_summary') }}">
@@ -155,62 +155,56 @@
               <input type="hidden" name="selected_fields" value="{{ field }}">
               {% endfor %}
 
-              <div class="row g-2 align-items-end mb-3">
-                <div class="col-md-4">
+              <div class="row g-2 align-items-end">
+                <div class="col-lg-2 col-md-3">
                   <label class="form-label tight">Start</label>
                   <input class="form-control form-control-sm" type="date" name="start_date" value="{{ start_date }}">
                 </div>
 
-                <div class="col-md-4">
+                <div class="col-lg-2 col-md-3">
                   <label class="form-label tight">End</label>
                   <input class="form-control form-control-sm" type="date" name="end_date" value="{{ end_date }}">
                 </div>
 
-                <div class="col-md-2">
-                  <label class="form-label tight">&nbsp;</label>
-                  <button type="submit" class="btn btn-primary btn-sm w-100 d-block">Apply</button>
+                <div class="col-lg-2 col-md-3">
+                  <label class="form-label tight">Min credits</label>
+                  <input class="form-control form-control-sm" type="number" step="any" name="min_credits" value="{{ min_credits }}" placeholder="e.g. 10">
                 </div>
 
-                <div class="col-md-2">
-                  <label class="form-label tight">&nbsp;</label>
+                <div class="col-lg-2 col-md-3">
+                  <label class="form-label tight">Max credits</label>
+                  <input class="form-control form-control-sm" type="number" step="any" name="max_credits" value="{{ max_credits }}" placeholder="e.g. 500">
+                </div>
+
+                <div class="col-lg-2 col-md-6">
+                  <div class="form-check compact-check mb-1">
+                    <input class="form-check-input" type="checkbox" name="zero_credits" value="1" id="zero_credits_overview"
+                           {% if zero_credits == '1' %}checked{% endif %} onchange="this.closest('form').submit()">
+                    <label class="form-check-label" for="zero_credits_overview">Zero credits only</label>
+                  </div>
+                </div>
+
+                <div class="col-lg-2 col-md-6">
                   <a class="btn btn-outline-secondary btn-sm w-100" href="{{ url_for('analytics.user_summary', name=name, email=email, date_field='date_partition') }}">
                     Clear
                   </a>
                 </div>
               </div>
 
-              <div class="row g-2 align-items-end credits-filter-row mb-3">
-                <div class="col-md-2">
-                  <label class="form-label tight">Min credits</label>
-                  <input class="form-control form-control-sm" type="number" step="any" name="min_credits" value="{{ min_credits }}" placeholder="e.g. 10">
-                </div>
-                <div class="col-md-2">
-                  <label class="form-label tight">Max credits</label>
-                  <input class="form-control form-control-sm" type="number" step="any" name="max_credits" value="{{ max_credits }}" placeholder="e.g. 500">
-                </div>
-                <div class="col-md-3 d-flex align-items-end pb-1">
-                  <div class="form-check mb-0">
-                    <input class="form-check-input" type="checkbox" name="zero_credits" value="1" id="zero_credits_overview"
-                           {% if zero_credits == '1' %}checked{% endif %} onchange="this.closest('form').submit()">
-                    <label class="form-check-label" for="zero_credits_overview">Zero credits only</label>
-                  </div>
-                </div>
-              </div>
-
               {% if user_models | length > 1 %}
-              <div class="mb-0">
+              <div class="compact-filter-group mt-2">
                 <label class="form-label tight">Models</label>
-                <div class="d-flex flex-wrap gap-2">
+                <div class="compact-check-list">
                   {% for model in user_models %}
-                  <div class="form-check">
+                  <div class="form-check compact-check">
                     <input class="form-check-input" type="checkbox" name="filter_models" value="{{ model }}" id="ov_model_{{ loop.index }}" {% if model in filter_models %}checked{% endif %}>
-                    <label class="form-check-label" style="font-size:.75rem;" for="ov_model_{{ loop.index }}">{{ model }}</label>
+                    <label class="form-check-label" for="ov_model_{{ loop.index }}">{{ model }}</label>
                   </div>
                   {% endfor %}
                 </div>
               </div>
               {% elif user_models | length == 1 %}
-              <div class="mb-0">
+              <div class="compact-filter-group mt-2">
                 <label class="form-label tight">Model</label>
                 <div><span class="filter-pill">{{ user_models[0] }}</span></div>
               </div>
@@ -218,11 +212,11 @@
             </form>
           </div>
 
-          <div class="row g-3">
+          <div class="row g-2 user-summary-overview-grid">
             <div class="col-md-6">
               <div class="section-card h-100 mb-0">
                 <h5>Summary by Usage Type</h5>
-                <div style="max-height:300px; overflow:auto;">
+                <div style="max-height:220px; overflow:auto;">
                   <table class="table table-sm records-table mb-0">
                     <thead>
                       <tr>
@@ -252,7 +246,7 @@
             <div class="col-md-6">
               <div class="section-card h-100 mb-0">
                 <h5>Summary by Model</h5>
-                <div style="max-height:300px; overflow:auto;">
+                <div style="max-height:220px; overflow:auto;">
                   <table class="table table-sm records-table mb-0">
                     <thead>
                       <tr>
@@ -282,7 +276,7 @@
             <div class="col-md-6">
               <div class="section-card h-100 mb-0">
                 <h5>Summary by IO</h5>
-                <div style="max-height:300px; overflow:auto;">
+                <div style="max-height:220px; overflow:auto;">
                   <table class="table table-sm records-table mb-0">
                     <thead>
                       <tr>
@@ -312,7 +306,7 @@
             <div class="col-md-6">
               <div class="section-card h-100 mb-0">
                 <h5>Summary by Raw Usage Type</h5>
-                <div style="max-height:300px; overflow:auto;">
+                <div style="max-height:220px; overflow:auto;">
                   <table class="table table-sm records-table mb-0">
                     <thead>
                       <tr>
@@ -432,7 +426,7 @@
 
         <!-- RECORDS TAB -->
         <div class="tab-pane fade {% if active_tab == 'records' %}show active{% endif %}" id="records" role="tabpanel">
-          <div class="section-card">
+          <div class="section-card user-summary-filter-card">
             <h5>Filters &amp; Display</h5>
 
             <form method="get" action="{{ url_for('analytics.user_summary') }}" id="records-form">
@@ -443,56 +437,45 @@
               <input type="hidden" name="fs" value="1">
               <input type="hidden" name="mfs" value="1">
 
-              <div class="row g-2 align-items-end mb-3">
-                <div class="col-md-5">
+              <div class="row g-2 align-items-end">
+                <div class="col-xl-2 col-lg-3 col-md-4">
                   <label class="form-label tight">Start date</label>
                   <input class="form-control form-control-sm" type="date" name="start_date" value="{{ start_date }}">
                 </div>
 
-                <div class="col-md-5">
+                <div class="col-xl-2 col-lg-3 col-md-4">
                   <label class="form-label tight">End date</label>
                   <input class="form-control form-control-sm" type="date" name="end_date" value="{{ end_date }}">
                 </div>
 
-                <div class="col-md-2">
+                <div class="col-xl-2 col-lg-2 col-md-4">
+                  <label class="form-label tight">Min credits</label>
+                  <input class="form-control form-control-sm" type="number" step="any" name="min_credits" value="{{ min_credits }}" placeholder="e.g. 10">
+                </div>
+                <div class="col-xl-2 col-lg-2 col-md-4">
+                  <label class="form-label tight">Max credits</label>
+                  <input class="form-control form-control-sm" type="number" step="any" name="max_credits" value="{{ max_credits }}" placeholder="e.g. 500">
+                </div>
+                <div class="col-xl-2 col-lg-2 col-md-4">
+                  <div class="form-check compact-check mb-1">
+                    <input class="form-check-input" type="checkbox" name="zero_credits" value="1" id="zero_credits_records"
+                           {% if zero_credits == '1' %}checked{% endif %} onchange="this.closest('form').submit()">
+                    <label class="form-check-label" for="zero_credits_records">Zero credits only</label>
+                  </div>
+                </div>
+                <div class="col-xl-2 col-lg-12 col-md-4">
                   <a class="btn btn-outline-secondary btn-sm w-100" href="{{ url_for('analytics.user_summary', name=name, email=email, date_field='date_partition', active_tab='records') }}">
                     Clear
                   </a>
                 </div>
               </div>
 
-              <div class="row g-2 align-items-end credits-filter-row mb-3">
-                <div class="col-md-2">
-                  <label class="form-label tight">Min credits</label>
-                  <input class="form-control form-control-sm" type="number" step="any" name="min_credits" value="{{ min_credits }}" placeholder="e.g. 10">
-                </div>
-                <div class="col-md-2">
-                  <label class="form-label tight">Max credits</label>
-                  <input class="form-control form-control-sm" type="number" step="any" name="max_credits" value="{{ max_credits }}" placeholder="e.g. 500">
-                </div>
-                <div class="col-md-3 d-flex align-items-end pb-1">
-                  <div class="form-check mb-0">
-                    <input class="form-check-input" type="checkbox" name="zero_credits" value="1" id="zero_credits_records"
-                           {% if zero_credits == '1' %}checked{% endif %} onchange="this.closest('form').submit()">
-                    <label class="form-check-label" for="zero_credits_records">Zero credits only</label>
-                  </div>
-                </div>
-                <div class="col text-end muted-help">
-                  {% if min_credits or max_credits %}
-                  credits {{ min_credits or '0' }}&ndash;{{ max_credits or '&infin;' }}
-                  {% endif %}
-                  {% if zero_credits == '1' %}
-                  {% if min_credits or max_credits %}&middot;{% endif %} zero credits only
-                  {% endif %}
-                </div>
-              </div>
-
               {% if user_types | length > 1 %}
-              <div class="mb-3">
+              <div class="compact-filter-group mt-2">
                 <label class="form-label tight">Usage Types</label>
-                <div class="d-flex flex-wrap gap-3">
+                <div class="compact-check-list">
                   {% for t in user_types %}
-                  <div class="form-check">
+                  <div class="form-check compact-check">
                     <input class="form-check-input" type="checkbox" name="filter_types" value="{{ t }}" id="type_{{ t }}" {% if t in filter_types %}checked{% endif %}>
                     <label class="form-check-label" for="type_{{ t }}">{{ t }}</label>
                   </div>
@@ -500,7 +483,7 @@
                 </div>
               </div>
               {% elif user_types | length == 1 %}
-              <div class="mb-3">
+              <div class="compact-filter-group mt-2">
                 <label class="form-label tight">Usage Type</label>
                 <div><span class="filter-pill">{{ user_types[0] }}</span></div>
                 <input type="hidden" name="filter_types" value="{{ user_types[0] }}">
@@ -508,47 +491,32 @@
               {% endif %}
 
               {% if user_models | length > 1 %}
-              <div class="mb-3">
+              <div class="compact-filter-group mt-2">
                 <label class="form-label tight">Models</label>
-                <div class="d-flex flex-wrap gap-2">
+                <div class="compact-check-list">
                   {% for model in user_models %}
-                  <div class="form-check">
+                  <div class="form-check compact-check">
                     <input class="form-check-input" type="checkbox" name="filter_models" value="{{ model }}" id="rec_model_{{ loop.index }}" {% if model in filter_models %}checked{% endif %}>
-                    <label class="form-check-label" style="font-size:.75rem;" for="rec_model_{{ loop.index }}">{{ model }}</label>
+                    <label class="form-check-label" for="rec_model_{{ loop.index }}">{{ model }}</label>
                   </div>
                   {% endfor %}
                 </div>
               </div>
               {% elif user_models | length == 1 %}
-              <div class="mb-3">
+              <div class="compact-filter-group mt-2">
                 <label class="form-label tight">Model</label>
                 <div><span class="filter-pill">{{ user_models[0] }}</span></div>
                 <input type="hidden" name="filter_models" value="{{ user_models[0] }}">
               </div>
               {% endif %}
 
-              <div class="mb-3">
+              <div class="compact-filter-group mt-2">
                 <label class="form-label tight">Display columns</label>
-                <div class="d-flex flex-wrap gap-2">
-                  {% for col in display_headers %}
-                  {% set is_checked = col in selected_fields %}
-                  {% set display_name = col %}
-
-                  {% if col == 'usage_type' %}{% set display_name = 'Raw usage type' %}
-                  {% elif col == 'usage_type_parsed_type' %}{% set display_name = 'Usage Type' %}
-                  {% elif col == 'usage_type_model' %}{% set display_name = 'Model' %}
-                  {% elif col == 'usage_type_io' %}{% set display_name = 'IO' %}
-                  {% elif col == 'usage_type_medium' %}{% set display_name = 'Medium' %}
-                  {% elif col == 'usage_type_date' %}{% set display_name = 'Usage Date' %}
-                  {% elif col == 'usage_credits' %}{% set display_name = 'Credits' %}
-                  {% elif col == 'usage_quantity' %}{% set display_name = 'Quantity' %}
-                  {% elif col == 'usage_units' %}{% set display_name = 'Units' %}
-                  {% elif col == 'date_partition' %}{% set display_name = 'Date' %}
-                  {% endif %}
-
-                  <div class="form-check">
-                    <input class="form-check-input" type="checkbox" name="selected_fields" value="{{ col }}" id="col_{{ loop.index }}" {% if is_checked %}checked{% endif %}>
-                    <label class="form-check-label" style="font-size:.75rem;" for="col_{{ loop.index }}">{{ display_name }}</label>
+                <div class="compact-check-list">
+                  {% for c in display_column_options %}
+                  <div class="form-check compact-check">
+                    <input class="form-check-input" type="checkbox" name="selected_fields" value="{{ c.key }}" id="col_{{ loop.index }}" {% if c.key in selected_fields %}checked{% endif %}>
+                    <label class="form-check-label" for="col_{{ loop.index }}">{{ c.label }}</label>
                   </div>
                   {% endfor %}
                 </div>
@@ -563,27 +531,13 @@
             </div>
 
             <div class="table-responsive" style="max-height:80vh; overflow:auto;">
-              <table class="table table-sm table-hover records-table mb-0">
+              <table class="table table-sm table-hover records-table table-grid mb-0" data-grid-key="user-summary-records">
                 <thead>
                   <tr>
-                    {% for col in display_columns %}
-                    {% set display_name = col %}
-
-                    {% if col == 'usage_type' %}{% set display_name = 'Raw usage type' %}
-                    {% elif col == 'usage_type_parsed_type' %}{% set display_name = 'Usage Type' %}
-                    {% elif col == 'usage_type_model' %}{% set display_name = 'Model' %}
-                    {% elif col == 'usage_type_io' %}{% set display_name = 'IO' %}
-                    {% elif col == 'usage_type_medium' %}{% set display_name = 'Medium' %}
-                    {% elif col == 'usage_type_date' %}{% set display_name = 'Usage Date' %}
-                    {% elif col == 'usage_credits' %}{% set display_name = 'Credits' %}
-                    {% elif col == 'usage_quantity' %}{% set display_name = 'Quantity' %}
-                    {% elif col == 'usage_units' %}{% set display_name = 'Units' %}
-                    {% elif col == 'date_partition' %}{% set display_name = 'Date' %}
-                    {% endif %}
-
-                    <th data-col="{{ col }}" onclick="sortByCol(this)">
-                      {{ display_name }}
-                      <span class="sort-indicator">{% if sort_by == col %}{{ '&#8593;' if sort_order == 'asc' else '&#8595;' }}{% endif %}</span>
+                    {% for c in record_columns %}
+                    <th class="{% if c.align == 'right' %}text-end{% endif %}" data-col="{{ c.key }}" onclick="sortByCol(this)">
+                      {{ c.label }}
+                      <span class="sort-indicator">{% if sort_by == c.key %}{{ '&#8593;' if sort_order == 'asc' else '&#8595;' }}{% endif %}</span>
                     </th>
                     {% endfor %}
                   </tr>
@@ -592,15 +546,19 @@
                 <tbody>
                   {% for r in rows_data %}
                   <tr>
-                    {% for col in display_columns %}
-                    <td title="{{ r[col] }}">
-                      {% if col == 'usage_units' and r[col] == 'counts' %}messages{% else %}{{ r[col] }}{% endif %}
+                    {% for c in record_columns %}
+                    <td class="{% if c.align == 'right' %}text-end tnum{% endif %}">
+                      {% if c.clip %}
+                      <span class="cell-clip" title="{{ r[c.key] }}">{{ r[c.key] }}</span>
+                      {% else %}
+                      {{ r[c.key] }}
+                      {% endif %}
                     </td>
                     {% endfor %}
                   </tr>
                   {% else %}
                   <tr>
-                    <td colspan="{{ display_columns|length or 1 }}" class="text-center text-muted py-4">No records</td>
+                    <td colspan="{{ record_columns|length or 1 }}" class="text-center text-muted py-4">No records</td>
                   </tr>
                   {% endfor %}
                 </tbody>
@@ -614,6 +572,7 @@
 {% endblock %}
 
 {% block scripts %}
+    <script src="{{ url_for('static', filename='js/column_grid.js') }}"></script>
     <script>
       // Hero Charts
 

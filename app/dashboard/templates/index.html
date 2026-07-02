@@ -186,7 +186,7 @@
         </div>
 
         <div class="table-scroll">
-          <table class="table table-sm table-hover records-table">
+          <table class="table table-sm table-hover records-table table-grid" data-grid-key="records-main">
             <thead>
               <tr>
                 {% for c in columns %}
@@ -234,6 +234,7 @@
 {% endblock %}
 
 {% block scripts %}
+    <script src="{{ url_for('static', filename='js/column_grid.js') }}"></script>
     <script>
       document.querySelectorAll('input[type="date"], select[name="search_field"], select[name="usage_type"], select[name="model"]').forEach(el => {
         el.addEventListener('change', () => el.closest('form').submit());

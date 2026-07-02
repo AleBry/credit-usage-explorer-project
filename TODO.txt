@@ -1,3 +1,5 @@
 - curl script for downloading new data, auto uploaded to program
-- Need tiers list for each user
+- Need tiers list for each user (data)
 - Make tiers list data, record changes for tiers, date/records of tier move up down, etc (assignment records)
+- filter N/A data to fit either misc (codex) or misc (chat)
+- Column moving (drag and drop) feature needs worked on

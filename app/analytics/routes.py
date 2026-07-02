@@ -6,6 +6,7 @@ from urllib.parse import urlencode
 import pandas as pd
 from flask import Blueprint, current_app, render_template, request
 
+from app.dashboard.service import DEFAULT_RECORD_COLUMNS, build_record_view, record_column_meta
 from app.shared.chart_data import usage_type_weekly_json
 from app.shared.csv_export import csv_response
 from app.shared.data_store import CreditUsageData
@@ -179,7 +180,7 @@ def create_analytics_blueprint(services) -> Blueprint:
                 [
                     ("Rank", "_rank"), ("Name", "name"), ("Email", "email"),
                     ("Credits", "total_credits"), ("Records", "rows"),
-                    ("Tokens", "total_tokens"),
+                    ("Token/msg tk", "total_tokens"), ("Token/msg msg", "total_messages"),
                 ],
             ),
             "users_by_type": (
@@ -212,7 +213,7 @@ def create_analytics_blueprint(services) -> Blueprint:
                     ("Rank", "_rank"), ("Name", "name"), ("Email", "email"),
                     ("Credits", "usage_credits"), ("Usage Type", "usage_type_parsed_type"),
                     ("Model", "usage_type_model"), ("IO", "usage_type_io"),
-                    ("Quantity", "usage_quantity"), ("Units", "usage_units"),
+                    ("(Token/msg)", "usage_quantity"), ("Units", "usage_units"),
                     ("Date", "date_partition"), ("Raw usage type", "usage_type"),
                 ],
             ),
@@ -327,12 +328,15 @@ def create_analytics_blueprint(services) -> Blueprint:
         hidden_by_default = {"name", "email", "account_id", "account_user_id", "public_id"}
         selected_fields = request.args.getlist("selected_fields")
         if not selected_fields:
-            selected_fields = [col for col in df.columns if col not in hidden_by_default]
+            selected_fields = [
+                col for col in DEFAULT_RECORD_COLUMNS
+                if col in df.columns and col not in hidden_by_default
+            ]
             display_columns = selected_fields
         else:
             display_columns = [c for c in selected_fields if c in df.columns]
 
-        rows_data = df[display_columns].fillna("").to_dict(orient="records") if display_columns else []
+        record_columns, rows_data = build_record_view(df, display_columns)
         total_credits = float(df["usage_credits"].sum()) if "usage_credits" in df.columns else 0.0
 
         totals_by_unit: dict = {}
@@ -354,6 +358,7 @@ def create_analytics_blueprint(services) -> Blueprint:
         first_row = df.iloc[0].fillna("").to_dict() if len(df) > 0 else {}
         hidden_columns = {"account_id", "account_user_id", "public_id", "name", "email"}
         display_headers = [col for col in d.columns if col not in hidden_columns]
+        display_column_options = [record_column_meta(col) for col in display_headers]
 
         summ_usage_type = make_summary("usage_type_parsed_type")
         summ_model = make_summary("usage_type_model")
@@ -433,6 +438,8 @@ def create_analytics_blueprint(services) -> Blueprint:
             rows_data=rows_data,
             display_columns=display_columns,
             display_headers=display_headers,
+            display_column_options=display_column_options,
+            record_columns=record_columns,
             headers=display_headers,
             date_field=date_field,
             start_date=start_date,

@@ -118,7 +118,7 @@
                   <th>Email</th>
                   <th>Credits</th>
                   <th>Records</th>
-                  <th>Tokens</th>
+                  <th>Token/msg</th>
                   <th></th>
                 </tr>
               </thead>
@@ -131,7 +131,10 @@
                   <td style="color:#8a92a0; font-size:.78rem;">{{ item.email or '&mdash;' }}</td>
                   <td class="credits">{{ '{:,.2f}'.format(item.total_credits) }}</td>
                   <td>{{ '{:,}'.format(item.rows) }}</td>
-                  <td>{{ '{:,.0f}'.format(item.total_tokens) }}</td>
+                  <td>
+                    <div>{{ '{:,.0f}'.format(item.total_tokens) }} tk</div>
+                    <div class="text-muted small">{{ '{:,.0f}'.format(item.total_messages) }} msg</div>
+                  </td>
                   <td>
                     <a class="drill-link" href="{{ url_for('analytics.user_summary',
                         name=item.name or '',
@@ -327,7 +330,7 @@
                   <th>Type</th>
                   <th>Model</th>
                   <th>I/O</th>
-                  <th>Quantity</th>
+                  <th>(Token/msg)</th>
                   <th>Units</th>
                   <th>Date</th>
                   <th></th>

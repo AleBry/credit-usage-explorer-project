@@ -29,6 +29,7 @@ def test_api_usage_rolls_up_to_codex_without_touching_raw_usage_type() -> None:
             "Completion 5 Reasoning",
         ],
         "usage_type_parsed_type": ["chat", "chat", "chat"],
+        "usage_units": ["counts", "counts", "counts"],
     })
 
     corrected = corrected_usage_view(df)
@@ -38,6 +39,9 @@ def test_api_usage_rolls_up_to_codex_without_touching_raw_usage_type() -> None:
     assert corrected.loc[0, "usage_type_parsed_type"] == "codex"
     assert corrected.loc[1, "usage_type_parsed_type"] == "codex"
     assert corrected.loc[2, "usage_type_parsed_type"] == "chat"
+    assert corrected.loc[0, "usage_units"] == "tokens"
+    assert corrected.loc[1, "usage_units"] == "tokens"
+    assert corrected.loc[2, "usage_units"] == "counts"
 
 
 if __name__ == "__main__":

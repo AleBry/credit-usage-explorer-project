@@ -60,13 +60,14 @@ class Leaderboards:
         self.df = df
         self.top_n = top_n
 
-    def _with_tokens(self, frame: pd.DataFrame) -> pd.DataFrame:
+    def _with_token_message_quantities(self, frame: pd.DataFrame) -> pd.DataFrame:
         frame = frame.copy()
-        frame["tokens_qty"] = (
-            frame["usage_quantity"].where(frame["usage_units"] == "tokens", 0.0)
-            if ("usage_units" in frame.columns and "usage_quantity" in frame.columns)
-            else 0.0
-        )
+        if "usage_units" in frame.columns and "usage_quantity" in frame.columns:
+            frame["tokens_qty"] = frame["usage_quantity"].where(frame["usage_units"] == "tokens", 0.0)
+            frame["messages_qty"] = frame["usage_quantity"].where(frame["usage_units"] == "counts", 0.0)
+        else:
+            frame["tokens_qty"] = 0.0
+            frame["messages_qty"] = 0.0
         return frame
 
     def by_user(self) -> list[dict]:
@@ -74,11 +75,12 @@ class Leaderboards:
         if not cols:
             return []
         agg = (
-            self._with_tokens(self.df).groupby(cols)
+            self._with_token_message_quantities(self.df).groupby(cols)
             .agg(
                 rows=("usage_credits", "count"),
                 total_credits=("usage_credits", "sum"),
                 total_tokens=("tokens_qty", "sum"),
+                total_messages=("messages_qty", "sum"),
             )
             .reset_index().sort_values("total_credits", ascending=False).head(self.top_n)
         )

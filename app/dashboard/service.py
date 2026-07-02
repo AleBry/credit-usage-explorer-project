@@ -20,7 +20,7 @@ _RECORD_COLUMN_META: dict[str, tuple[str, str, bool]] = {
     "email":                  ("Email", "left", True),
     "usage_type_parsed_type": ("Usage Type", "left", False),
     "usage_type_model":       ("Model", "left", True),
-    "usage_quantity":         ("Quantity", "right", False),
+    "usage_quantity":         ("(Token/msg)", "right", False),
     "usage_credits":          ("Credits", "right", False),
     "usage_units":            ("Units", "left", False),
     "usage_type":             ("Raw usage type", "left", True),

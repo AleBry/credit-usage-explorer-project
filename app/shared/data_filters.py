@@ -43,4 +43,8 @@ def apply_usage_corrections(df: pd.DataFrame) -> pd.DataFrame:
     mask = mask_api_usage(df)
     if mask.any():
         df.loc[mask, "usage_type_parsed_type"] = "codex"
+    if "usage_units" in df.columns:
+        codex = df["usage_type_parsed_type"].fillna("").astype(str).str.strip().str.lower() == "codex"
+        counts = df["usage_units"].fillna("").astype(str).str.strip().str.lower() == "counts"
+        df.loc[codex & counts, "usage_units"] = "tokens"
     return df

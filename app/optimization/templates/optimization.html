@@ -61,8 +61,8 @@
     <div class="col-lg-7">
       <div class="section-card h-100 mb-0">
         <h5>Recommendation Summary</h5>
-        <div class="table-responsive">
-          <table class="table table-sm records-table mb-0">
+        <div class="table-responsive optimization-table-wrap">
+          <table class="table table-sm records-table optimization-summary-table mb-0">
             <thead>
               <tr>
                 <th>Action</th>
@@ -92,8 +92,8 @@
     <div class="col-lg-5">
       <div class="section-card h-100 mb-0">
         <h5>Tier Summary</h5>
-        <div class="table-responsive">
-          <table class="table table-sm records-table mb-0">
+        <div class="table-responsive optimization-table-wrap">
+          <table class="table table-sm records-table optimization-tier-table mb-0">
             <thead>
               <tr>
                 <th>Tier</th>
@@ -197,7 +197,7 @@
       <span class="badge bg-secondary">{{ "{:,}".format(recommendation_count) }}</span>
     </div>
     <div class="table-responsive" style="max-height:72vh; overflow:auto;">
-      <table class="table table-sm table-hover records-table mb-0">
+      <table class="table table-sm table-hover records-table optimization-actions-table mb-0">
         <thead>
           <tr>
             <th>User</th>
