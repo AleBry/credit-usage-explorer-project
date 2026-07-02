@@ -66,7 +66,11 @@ def _top_share(values: pd.Series, fraction: float) -> float:
     return float(usage.head(max(1, math.ceil(len(usage) * fraction))).sum() / total)
 
 
-def _derive_weekly_from_records(records_df: pd.DataFrame, tier_config: dict) -> pd.DataFrame:
+def _derive_weekly_from_records(
+    records_df: pd.DataFrame,
+    tier_config: dict,
+    tier_assignments: dict[str, str] | None = None,
+) -> pd.DataFrame:
     required = {"email", "date_partition", "usage_credits"}
     if records_df is None or records_df.empty or not required.issubset(records_df.columns):
         return pd.DataFrame()
@@ -95,12 +99,22 @@ def _derive_weekly_from_records(records_df: pd.DataFrame, tier_config: dict) -> 
         .agg(**agg)
         .sort_values(["week_start", "credits_used"], ascending=[True, False])
     )
-    weekly["governance_tier"] = "Baseline"
-    weekly["weekly_credit_cap"] = baseline_cap
-    weekly["cap_utilization"] = weekly["credits_used"] / baseline_cap
+    assignments = {
+        str(email).strip().lower(): str(tier).strip()
+        for email, tier in (tier_assignments or {}).items()
+        if str(email).strip() and str(tier).strip() in caps
+    }
+    weekly["_assignment_key"] = weekly["email"].astype(str).str.strip().str.lower()
+    weekly["governance_tier"] = weekly["_assignment_key"].map(assignments).fillna("Baseline")
+    weekly["tier_assignment_source"] = weekly["_assignment_key"].map(assignments).notna().map({
+        True: "assigned",
+        False: "default",
+    })
+    weekly["weekly_credit_cap"] = weekly["governance_tier"].map(caps).fillna(baseline_cap)
+    weekly["cap_utilization"] = weekly["credits_used"] / weekly["weekly_credit_cap"].replace(0, baseline_cap)
     weekly["remaining_weekly_credits"] = weekly["weekly_credit_cap"] - weekly["credits_used"]
     weekly["pressure_flag"] = weekly["cap_utilization"].apply(pressure_flag)
-    return weekly
+    return weekly.drop(columns=["_assignment_key"])
 
 
 def _trend(first: float, latest: float) -> str:
@@ -144,6 +158,8 @@ def build_user_summary(user_week_history: pd.DataFrame) -> pd.DataFrame:
         "latest_governance_tier": ("governance_tier", "last"),
         "latest_weekly_credit_cap": ("weekly_credit_cap", "last"),
     }
+    if "tier_assignment_source" in df.columns:
+        agg["latest_tier_assignment_source"] = ("tier_assignment_source", "last")
     if "latest_name" in df.columns:
         agg["latest_name"] = ("latest_name", "last")
     if "latest_department" in df.columns:
@@ -188,8 +204,12 @@ def build_recommendations(user_summary: pd.DataFrame, tier_config: dict) -> pd.D
     )
 
 
-def build_optimization_result(records_df: pd.DataFrame, tier_config: dict) -> OptimizationResult:
-    user_week = _derive_weekly_from_records(records_df, tier_config)
+def build_optimization_result(
+    records_df: pd.DataFrame,
+    tier_config: dict,
+    tier_assignments: dict[str, str] | None = None,
+) -> OptimizationResult:
+    user_week = _derive_weekly_from_records(records_df, tier_config, tier_assignments)
     if user_week.empty:
         empty = pd.DataFrame()
         return OptimizationResult("current project records", empty, empty, empty, empty, empty, {})

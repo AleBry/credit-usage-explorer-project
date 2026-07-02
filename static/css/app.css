@@ -1,27 +1,21 @@
-/* ============================================================
-   Credit Usage Explorer — application stylesheet
-   (was bnl.css; forecast.css merged in)
-   ============================================================ */
-
 :root {
   --sidenav-w: 210px;
   --surface: #fff;
-  --surface-2: #fbfcfd;     /* faint raised bg (header rows, column grid) */
+  --surface-2: #fbfcfd;
   --bg: #f8f9fb;
   --border: #e3e6ea;
   --border-soft: #f0f2f5;
-  --muted: #8a92a0;         /* secondary text */
-  --ink: #1a1d23;           /* primary headings/values */
-  --text: #2c3140;          /* table/body text */
-  --text-soft: #555c6b;     /* tertiary text */
-  --faint: #adb5bd;         /* disabled/sub notes */
-  --hover: #f3f5f8;         /* row hover */
+  --muted: #8a92a0;
+  --ink: #1a1d23;
+  --text: #2c3140;
+  --text-soft: #555c6b;
+  --faint: #adb5bd;
+  --hover: #f3f5f8;
   --accent: #0d6efd;
-  --accent-soft: #eef4ff;   /* subtle accent wash */
+  --accent-soft: #eef4ff;
   --radius: 10px;
   --shadow: 0 4px 12px rgba(0, 0, 0, .05);
-  /* Density lever — shared by the cards/table/list result views. Toggling
-     .density-compact on <html> tightens every view at once. */
+
   --view-pad-y: .6rem;
   --view-pad-x: .75rem;
   --view-font: .85rem;
@@ -56,7 +50,6 @@
 html { color-scheme: light; }
 body { display: flex; min-height: 100vh; background: var(--bg); color: var(--text); }
 
-/* ── Shared card surface (one source of truth for the panel look) ── */
 .dash-metric, .dash-section, .filter-card, .columns-card, .results-card,
 .empty-state, .user-card, .stat-card, .section-card, .user-hero,
 .settings-section, .chart-card, .kpi-card {
@@ -65,7 +58,6 @@ body { display: flex; min-height: 100vh; background: var(--bg); color: var(--tex
   border-radius: var(--radius);
 }
 
-/* ── Shared uppercase section/eyebrow labels ── */
 .dash-metric-label, .dash-section-title, .section-label, .results-header .title,
 .lb-card-header .title, .stat-label, .section-card h5, .settings-section h5,
 .hero-chart-label, .kpi-label {
@@ -75,7 +67,6 @@ body { display: flex; min-height: 100vh; background: var(--bg); color: var(--tex
   color: var(--muted);
 }
 
-/* ── Side navigation ── */
 .app-sidenav {
   position: fixed;
   top: 0; left: 0;
@@ -138,7 +129,7 @@ body { display: flex; min-height: 100vh; background: var(--bg); color: var(--tex
 .sidenav-link svg { flex-shrink: 0; opacity: .75; }
 .sidenav-link:hover svg, .sidenav-link.active svg { opacity: 1; }
 .sidenav-sep { height: 1px; background: var(--border-soft); margin: .35rem .75rem; }
-/* Sidebar "Upload data" action button. */
+
 .sidenav-upload {
   display: flex; align-items: center; justify-content: center; gap: .5rem;
   width: 100%; padding: .5rem .9rem;
@@ -169,7 +160,6 @@ body { display: flex; min-height: 100vh; background: var(--bg); color: var(--tex
 }
 .alerts-btn:hover { color: var(--ink); background: var(--hover); }
 
-/* ── Page content (offset by sidebar) ── */
 .app-content {
   margin-left: var(--sidenav-w);
   flex: 1;
@@ -177,7 +167,6 @@ body { display: flex; min-height: 100vh; background: var(--bg); color: var(--tex
   min-width: 0;
 }
 
-/* ── Notification alerts ── */
 .alert-item .alert-unread-dot {
   width: 8px; height: 8px; border-radius: 50%;
   background: var(--accent); flex-shrink: 0;
@@ -187,18 +176,16 @@ body { display: flex; min-height: 100vh; background: var(--bg); color: var(--tex
 .alert-item.read .alert-unread-dot { display: none; }
 .rule-row-off { opacity: .55; }
 
-/* ── Flash messages ── */
 .flash-container { padding: .75rem 1.5rem 0; }
 
-/* ── Typography ── */
 .page-title { font-size: 1.3rem; font-weight: 700; color: var(--ink); margin: 0; }
 .page-subtitle { font-size: .84rem; color: var(--muted); margin: .25rem 0 0 0; }
 .section-label { font-size: .72rem; margin-bottom: .8rem; }
 
-/* ── Shared utilities ── */
 .cursor-pointer   { cursor: pointer; }
 .cursor-crosshair { cursor: crosshair; }
 .toggle-label     { cursor: pointer; user-select: none; }
+.min-w-0          { min-width: 0; }
 .scroll-box       { max-height: 300px; overflow: auto; }
 .w-rank           { width: 40px; }
 .page-1280        { max-width: 1280px; }
@@ -213,7 +200,6 @@ body { display: flex; min-height: 100vh; background: var(--bg); color: var(--tex
 .acc-item { border-radius: var(--radius); overflow: hidden; margin-bottom: .5rem; border: 1px solid var(--border); }
 .acc-btn  { font-size: .85rem; font-weight: 600; background: var(--bg); }
 
-/* ── Summary / dashboard ── */
 .dash-metric-row {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
@@ -261,7 +247,6 @@ body { display: flex; min-height: 100vh; background: var(--bg); color: var(--tex
   vertical-align: middle;
 }
 
-/* ── Pacing / forecast status pills ── */
 .pacing-pill {
   font-size: .75rem;
   font-weight: 700;
@@ -278,13 +263,11 @@ body { display: flex; min-height: 100vh; background: var(--bg); color: var(--tex
 .pacing-pill.HIGH_UNDERUSE  { background: #dbeafe; color: #1e40af; }
 .pacing-pill.EXHAUSTION_RISK { background: #fee2e2; color: #991b1b; }
 
-/* ── Forms ── */
 .form-label { font-size: .78rem; font-weight: 600; color: var(--text-soft); margin-bottom: .25rem; }
 .form-label.tight { font-size: .82rem; }
 .form-control, .form-select { font-size: .82rem; }
 .form-check-label { font-size: .75rem; color: var(--text-soft); }
 
-/* ── Records page ── */
 .filter-card, .columns-card { padding: 1rem 1.25rem; margin-bottom: 1.25rem; }
 .column-grid {
   max-height: 145px;
@@ -366,7 +349,6 @@ body { display: flex; min-height: 100vh; background: var(--bg); color: var(--tex
 .sort-indicator.active { opacity: 1; color: var(--accent); }
 th[data-col]:hover .sort-indicator { opacity: .55; }
 
-/* Optimization page */
 .optimization-kpi-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -401,7 +383,6 @@ th[data-col]:hover .sort-indicator { opacity: .55; }
   margin-top: .25rem;
 }
 
-/* ── Tiers page ── */
 .filter-bar {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -499,11 +480,9 @@ th[data-col]:hover .sort-indicator { opacity: .55; }
 }
 .drill-link:hover { text-decoration: underline; }
 
-/* ── Empty state ── */
 .empty-state { padding: 2.5rem 1rem; text-align: center; color: var(--muted); font-size: .9rem; }
 .lb-table .empty-state { border: none; padding: 3rem 1rem; background: transparent; }
 
-/* ── User cards ── */
 .user-card {
   height: 100%;
   overflow: hidden;
@@ -541,21 +520,19 @@ th[data-col]:hover .sort-indicator { opacity: .55; }
 }
 .result-count { font-size: .8rem; color: var(--muted); margin-bottom: 1rem; }
 
-/* ── Shared result views (cards / table / list) + density ── */
 .view-toolbar {
   display: flex; align-items: center; justify-content: space-between;
   gap: .75rem; flex-wrap: wrap; margin-bottom: 1rem;
 }
 .view-controls .btn { display: inline-flex; align-items: center; gap: .35rem; }
 .view-controls .btn svg { flex: 0 0 auto; }
-/* Collapse the toggle to icon-only on narrow screens to keep one row. */
+
 @media (max-width: 575.98px) { .view-btn-label { display: none; } }
-/* Compact cards: tighten padding + metric spacing when density is on. */
+
 .density-compact .user-card-body { padding: var(--view-pad-y) var(--view-pad-x); }
 .density-compact .row.g-3 { --bs-gutter-x: var(--view-gap); --bs-gutter-y: var(--view-gap); }
 .density-compact .metric-row { padding-top: .25rem; margin-top: .25rem; font-size: .76rem; }
 
-/* Table view — dense, sortable-feeling rows that link like the cards. */
 .view-table { width: 100%; border-collapse: collapse; font-size: var(--view-font); }
 .view-table thead th {
   text-align: left; color: var(--muted); font-weight: 600;
@@ -575,7 +552,6 @@ th[data-col]:hover .sort-indicator { opacity: .55; }
 .view-table .vt-email { color: var(--muted); font-size: .9em; }
 .view-table td.vt-strong { font-weight: 700; color: var(--ink); }
 
-/* List view — one scannable line per record. */
 .view-list-row {
   display: flex; align-items: center; gap: .65rem; text-decoration: none; color: inherit;
   padding: var(--view-pad-y) var(--view-pad-x);
@@ -592,21 +568,55 @@ th[data-col]:hover .sort-indicator { opacity: .55; }
 .view-list-row .vlr-strong { font-weight: 700; color: var(--ink); }
 .view-list-row .vlr-sep { color: var(--faint); margin: 0 .1rem; }
 .view-list-row .vlr-caret { color: var(--faint); font-size: 1.1rem; flex: 0 0 auto; }
-/* Drop the secondary metrics on very narrow screens, keep credits. */
+
 @media (max-width: 575.98px) {
   .view-list-row .vlr-metrics { white-space: normal; text-align: right; }
 }
 
-/* ── User summary page ── */
 .stat-card { padding: 1.1rem 1rem; text-align: center; }
-.stat-label { font-size: .75rem; letter-spacing: .06em; margin-bottom: .2rem; }
+.user-summary-mini-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: .45rem;
+}
+.user-summary-score-card {
+  min-height: 58px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: .48rem .55rem;
+}
+.user-summary-score-card .stat-value {
+  font-size: clamp(.82rem, .95vw, 1rem);
+  line-height: 1.12;
+  overflow-wrap: anywhere;
+}
+.optimization-action-card {
+  text-align: left;
+  min-height: auto;
+  padding: .55rem .65rem;
+}
+.optimization-action-card .stat-value {
+  font-size: clamp(.82rem, .95vw, .98rem);
+  line-height: 1.18;
+  overflow-wrap: anywhere;
+}
+.stat-label { font-size: .68rem; letter-spacing: .06em; margin-bottom: .12rem; }
 .stat-value { font-size: 1.75rem; font-weight: 700; color: var(--ink); line-height: 1.1; }
 .section-card { padding: 1.25rem 1.5rem; margin-bottom: 1.25rem; }
 .section-card h5 { font-size: .8rem; margin-bottom: 1rem; }
-.user-hero { padding: 1.25rem 1.5rem; margin-bottom: 1.25rem; }
-.user-name-hero { font-size: 1.5rem; font-weight: 700; color: var(--ink); margin-bottom: .15rem; }
-.user-detail { font-size: .85rem; color: var(--muted); margin-bottom: .3rem; word-break: break-word; }
+.user-hero { padding: .95rem 1.25rem; margin-bottom: .9rem; }
+.user-name-hero { font-size: 1.35rem; font-weight: 700; color: var(--ink); margin-bottom: .1rem; }
+.user-detail { font-size: .78rem; color: var(--muted); margin-bottom: .16rem; word-break: break-word; line-height: 1.22; }
 .user-detail .label { color: var(--text-soft); font-weight: 600; }
+.user-summary-chart-box {
+  position: relative;
+  height: 172px;
+}
+@media (max-width: 1199.98px) {
+  .user-summary-mini-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .user-summary-chart-box { height: 140px; }
+}
 .filter-pill {
   display: inline-block;
   font-size: .75rem;
@@ -643,7 +653,6 @@ th[data-col]:hover .sort-indicator { opacity: .55; }
 }
 .hero-chart-label { font-size: .68rem; margin-bottom: .4rem; }
 
-/* ── Settings page ── */
 .settings-section { padding: 1.5rem; margin-bottom: 1.5rem; }
 .settings-section h5 {
   font-size: .9rem;
@@ -675,14 +684,11 @@ th[data-col]:hover .sort-indicator { opacity: .55; }
 .settings-table tbody td { padding: .5rem .6rem; border-bottom: 1px solid var(--border-soft); vertical-align: middle; }
 .settings-table tbody tr:last-child td { border-bottom: none; }
 
-/* ── Chart cards (Summary / Forecast / Tiers) ── */
 .chart-card { padding: 1rem 1.1rem; }
 .chart-card-title { font-size: .85rem; font-weight: 700; color: var(--ink); margin-bottom: .1rem; }
 .chart-card-sub { font-size: .66rem; color: var(--faint); margin-bottom: .6rem; }
 .chart-toolbar { display: flex; gap: .3rem; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
 
-/* Compact per-chart filter dropdowns (Summary charts). Sized to sit inline with
-   the small toolbar buttons rather than the full Bootstrap form-select height. */
 .chart-filter-select {
   width: auto; min-width: 6.5rem;
   font-size: .72rem; line-height: 1.2;
@@ -690,7 +696,6 @@ th[data-col]:hover .sort-indicator { opacity: .55; }
   height: auto; background-position: right .35rem center;
 }
 
-/* ── Forecast page (KPI strip, snapshot table/toolbar) ── */
 .label-empty { color: var(--faint); font-style: italic; }
 .kpi-strip {
   display: grid;
@@ -734,7 +739,6 @@ th[data-col]:hover .sort-indicator { opacity: .55; }
 .snap-toolbar form { margin: 0; display: inline-block; }
 .snap-toolbar .btn { font-size: .72rem; padding: .1rem .5rem; }
 
-/* ── Setup wizard step badges ── */
 .setup-step {
   display: inline-flex; align-items: center; justify-content: center;
   width: 22px; height: 22px; border-radius: 50%;
@@ -743,9 +747,6 @@ th[data-col]:hover .sort-indicator { opacity: .55; }
 }
 .setup-step.done { background: #198754; color: #fff; }
 
-/* ============================================================
-   Theme toggle + dark-mode component overrides
-   ============================================================ */
 .theme-toggle {
   flex: 0 0 auto;
   background: transparent;
@@ -764,7 +765,6 @@ th[data-col]:hover .sort-indicator { opacity: .55; }
 
 .alert-title { color: var(--ink); }
 
-/* Bootstrap pieces that don't read our variables on their own */
 [data-theme="dark"] .form-control,
 [data-theme="dark"] .form-select {
   background-color: var(--surface-2);
@@ -817,9 +817,6 @@ th[data-col]:hover .sort-indicator { opacity: .55; }
   --bs-table-border-color: var(--border);
 }
 
-/* ============================================================
-   Table readability polish (airy rows, tabular numbers, avatars)
-   ============================================================ */
 .lb-table thead th, .records-table thead th, .settings-table thead th { background: var(--surface-2); }
 .lb-table thead th { padding: .6rem .9rem; }
 .lb-table tbody td { padding: .7rem .9rem; }
@@ -828,7 +825,6 @@ th[data-col]:hover .sort-indicator { opacity: .55; }
   font-variant-numeric: tabular-nums;
 }
 
-/* Initials avatar (reference-style user rows/cards) */
 .avatar {
   display: inline-flex; align-items: center; justify-content: center;
   width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0;

@@ -1,1 +1,3 @@
 - curl script for downloading new data, auto uploaded to program
+- Need tiers list for each user
+- Make tiers list data, record changes for tiers, date/records of tier move up down, etc (assignment records)

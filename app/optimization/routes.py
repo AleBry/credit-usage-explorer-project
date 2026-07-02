@@ -5,9 +5,9 @@ from io import StringIO
 import re
 
 import pandas as pd
-from flask import Blueprint, Response, render_template, request
+from flask import Blueprint, Response, flash, redirect, render_template, request, url_for
 
-from .service import build_optimization_result
+from .service import build_optimization_result, tier_caps
 
 
 def create_optimization_blueprint(services) -> Blueprint:
@@ -16,7 +16,11 @@ def create_optimization_blueprint(services) -> Blueprint:
     bp = Blueprint("optimization", __name__, template_folder="templates", url_prefix="")
 
     def _result():
-        return build_optimization_result(store.data.df, config_svc.load_tiers())
+        return build_optimization_result(
+            store.data.df,
+            config_svc.load_tiers(),
+            config_svc.load_user_tiers(),
+        )
 
     def _slug(value: object, max_chars: int = 36) -> str:
         text = str(value or "").strip().lower()
@@ -106,12 +110,15 @@ def create_optimization_blueprint(services) -> Blueprint:
     def optimization_page() -> str:
         result = _result()
         recommendations, filters = _filter_recommendations(result)
+        tiers = tier_caps(config_svc.load_tiers())
+        available_tiers = [name for name, _ in sorted(tiers.items(), key=lambda item: item[1])]
+        assigned_tier_count = len(config_svc.load_user_tiers())
 
         source = result.recommendations
         actions = sorted(source["recommended_action"].dropna().unique().tolist()) if not source.empty else []
         priorities = sorted(source["review_priority"].dropna().unique().tolist()) if not source.empty else []
-        current_tiers = sorted(source["latest_governance_tier"].dropna().unique().tolist()) if not source.empty else []
-        recommended_tiers = sorted(source["recommended_tier"].dropna().unique().tolist()) if not source.empty else []
+        current_tiers = sorted(set(available_tiers) | (set(source["latest_governance_tier"].dropna().unique().tolist()) if not source.empty else set()))
+        recommended_tiers = sorted(set(available_tiers) | (set(source["recommended_tier"].dropna().unique().tolist()) if not source.empty else set()))
         actionable = int(source["review_priority"].isin(["ACTIONABLE"]).sum()) if not source.empty else 0
 
         return render_template(
@@ -125,9 +132,38 @@ def create_optimization_blueprint(services) -> Blueprint:
             recommended_tiers=recommended_tiers,
             filters=filters,
             actionable=actionable,
+            available_tiers=available_tiers,
+            assigned_tier_count=assigned_tier_count,
+            return_to=request.full_path,
             rec_summary=result.recommendation_summary.to_dict(orient="records") if not result.recommendation_summary.empty else [],
             tier_summary=result.tier_summary.to_dict(orient="records") if not result.tier_summary.empty else [],
         )
+
+    @bp.route("/optimization/user-tier", methods=["POST"])
+    def update_user_tier() -> object:
+        email = request.form.get("email", "").strip().lower()
+        tier = request.form.get("tier", "").strip()
+        next_url = request.form.get("next", "") or url_for("optimization.optimization_page")
+        if not next_url.startswith("/"):
+            next_url = url_for("optimization.optimization_page")
+
+        tiers = tier_caps(config_svc.load_tiers())
+        assignments = config_svc.load_user_tiers()
+        if not email:
+            flash("No user selected for tier update.", "warning")
+            return redirect(next_url)
+        if tier and tier not in tiers:
+            flash(f"Tier '{tier}' is not in the current tier policy.", "danger")
+            return redirect(next_url)
+
+        if tier:
+            assignments[email] = tier
+            flash(f"Tier updated for {email}.", "success")
+        else:
+            assignments.pop(email, None)
+            flash(f"Tier reset to Baseline default for {email}.", "success")
+        config_svc.save_user_tiers(assignments)
+        return redirect(next_url)
 
     @bp.route("/optimization/export.csv", methods=["GET"])
     def optimization_export_csv() -> Response:

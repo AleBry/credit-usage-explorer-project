@@ -45,6 +45,7 @@ class AppConfig:
         self.config_dir = config_dir
         self.contract_path = config_dir / "contract_config.yaml"
         self.tier_path = config_dir / "tier_policy_config.yaml"
+        self.user_tiers_path = config_dir / "user_tier_assignments.json"
         self.alert_rules_path = config_dir / "alert_rules.json"
         # Which alert conditions the user has dismissed/read (the navbar bell
         # "inbox"). Persisted server-side so read-state survives across browsers
@@ -87,6 +88,34 @@ class AppConfig:
         self.config_dir.mkdir(parents=True, exist_ok=True)
         with open(self.tier_path, "w", encoding="utf-8") as f:
             yaml.dump(data, f, default_flow_style=False, allow_unicode=True)
+
+    def load_user_tiers(self) -> dict[str, str]:
+        if not self.user_tiers_path.exists():
+            return {}
+        try:
+            data = json.loads(self.user_tiers_path.read_text(encoding="utf-8"))
+            assignments = data.get("assignments", data) if isinstance(data, dict) else {}
+            if not isinstance(assignments, dict):
+                return {}
+            return {
+                str(email).strip().lower(): str(tier).strip()
+                for email, tier in assignments.items()
+                if str(email).strip() and str(tier).strip()
+            }
+        except Exception:
+            return {}
+
+    def save_user_tiers(self, assignments: dict[str, str]) -> None:
+        clean = {
+            str(email).strip().lower(): str(tier).strip()
+            for email, tier in assignments.items()
+            if str(email).strip() and str(tier).strip()
+        }
+        self.config_dir.mkdir(parents=True, exist_ok=True)
+        self.user_tiers_path.write_text(
+            json.dumps({"assignments": dict(sorted(clean.items()))}, indent=2),
+            encoding="utf-8",
+        )
 
     def load_alert_rules(self) -> list[AlertRule]:
         if not self.alert_rules_path.exists():

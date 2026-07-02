@@ -10,7 +10,7 @@ import pandas as pd
 # the wall of raw columns collapses to a clean, condensed default view.
 
 # Friendly units for the merged "Quantity" cell (raw values are terse codes).
-UNIT_LABELS = {"tokens": "tokens", "counts": "counts", "duration_s": "sec"}
+UNIT_LABELS = {"tokens": "tokens", "counts": "messages", "duration_s": "sec"}
 
 # (label, align, clip) per known column. Unknown columns fall back to a
 # title-cased label, left-aligned and clipped (safe for long id/text fields).
@@ -74,6 +74,9 @@ def _format_record_cell(col: str, row: dict, units_present: bool) -> str:
             unit = str(row.get("usage_units") or "").strip()
             return f"{qty} {UNIT_LABELS.get(unit, unit)}".strip()
         return qty
+    if col == "usage_units":
+        unit = str(value or "").strip()
+        return UNIT_LABELS.get(unit, unit) or "—"
     if value is None or (isinstance(value, float) and pd.isna(value)):
         return "—"
     text = str(value).strip()

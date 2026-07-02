@@ -383,11 +383,13 @@ def create_analytics_blueprint(services) -> Blueprint:
         optimization_user = None
         optimization_history = []
         optimization_source = ""
+        optimization_assigned_tier_count = 0
         try:
             from app.optimization.service import build_optimization_result
 
-            opt = build_optimization_result(d.df, config_svc.load_tiers())
+            opt = build_optimization_result(d.df, config_svc.load_tiers(), config_svc.load_user_tiers())
             optimization_source = opt.source_label
+            optimization_assigned_tier_count = len(config_svc.load_user_tiers())
             rec = opt.recommendations
             if rec is not None and not rec.empty:
                 if email and "email" in rec.columns:
@@ -418,6 +420,7 @@ def create_analytics_blueprint(services) -> Blueprint:
             optimization_user = None
             optimization_history = []
             optimization_source = ""
+            optimization_assigned_tier_count = 0
         optimization_page_available = "optimization.optimization_page" in current_app.view_functions
 
         return render_template(
@@ -459,6 +462,7 @@ def create_analytics_blueprint(services) -> Blueprint:
             optimization_user=optimization_user,
             optimization_history=optimization_history,
             optimization_source=optimization_source,
+            optimization_assigned_tier_count=optimization_assigned_tier_count,
             optimization_page_available=optimization_page_available,
         )
 
@@ -579,7 +583,7 @@ def create_analytics_blueprint(services) -> Blueprint:
             columns = [
                 ("Name", "name"), ("Email", "email"), ("Records", "rows"),
                 ("Credits", "total_credits"), ("Quantity", "total_quantity"),
-                ("Tokens", "total_tokens"), ("Counts", "total_counts"),
+                ("Tokens", "total_tokens"), ("Messages", "total_counts"),
                 ("Duration seconds", "total_duration_s"),
             ]
             rows = _basic_user_rows(d)

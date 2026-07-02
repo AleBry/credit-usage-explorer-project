@@ -9,17 +9,17 @@
     <div class="container py-4" style="max-width: 1280px;">
 
       <!-- HEADER -->
-      <div class="mb-4">
+      <div class="mb-3">
         <h1 class="page-title">User Summary</h1>
         <p class="page-subtitle">Review usage totals, summaries, and raw records for one user.</p>
       </div>
 
       <!-- USER HERO -->
       <div class="user-hero">
-        <div class="row g-4 align-items-start">
+        <div class="row g-3 align-items-start">
 
-          <!-- Left: identity + stat numbers -->
-          <div class="col-md-5">
+          <!-- Left: identity + compact stats -->
+          <div class="col-xl-4 col-lg-5">
             <div class="user-name-hero">{{ name or email or 'User' }}</div>
 
             {% if email and email != name %}
@@ -35,97 +35,82 @@
             <div class="user-detail"><span class="label">Public ID:</span> {{ public_id }}</div>
             {% endif %}
 
-            <div class="row g-2 mt-2 align-items-stretch">
-              <div class="col-7">
-                <div class="row g-2">
-                  <div class="col-6">
-                    <div class="stat-card">
-                      <div class="stat-label">Records</div>
-                      <div class="stat-value" style="font-size:1.35rem;">{{ '{:,}'.format(rows) }}</div>
-                    </div>
-                  </div>
-                  <div class="col-6">
-                    <div class="stat-card">
-                      <div class="stat-label">Credits</div>
-                      <div class="stat-value" style="font-size:1.35rem;">{{ '{:,.0f}'.format(total_credits) }}</div>
-                    </div>
-                  </div>
-                  <div class="col-6">
-                    <div class="stat-card">
-                      <div class="stat-label">Tokens</div>
-                      <div class="stat-value" style="font-size:1.35rem;">{{ '{:,.0f}'.format(totals_by_unit.get('tokens', 0.0)) }}</div>
-                    </div>
-                  </div>
-                  <div class="col-6">
-                    <div class="stat-card">
-                      <div class="stat-label">Counts</div>
-                      <div class="stat-value" style="font-size:1.35rem;">{{ '{:,.0f}'.format(totals_by_unit.get('counts', 0.0)) }}</div>
-                    </div>
-                  </div>
-                </div>
+            <div class="user-summary-mini-grid mt-2">
+              <div class="stat-card user-summary-score-card">
+                <div class="stat-label">Records</div>
+                <div class="stat-value">{{ '{:,}'.format(rows) }}</div>
               </div>
-              <div class="col-5">
-                <div class="stat-card h-100">
-                  <div class="d-flex justify-content-between align-items-center gap-2 mb-1">
-                    <div class="stat-label mb-0">Optimization Action</div>
-                    <button class="btn btn-outline-primary btn-sm py-0 px-1 flex-shrink-0" type="button"
-                            title="View optimization" aria-label="View optimization"
-                            onclick="document.getElementById('optimization-tab').click()">
-                      <svg width="13" height="13" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true">
-                        <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/>
-                        <path d="M8 13A5 5 0 1 1 8 3a5 5 0 0 1 0 10zm0 1A6 6 0 1 0 8 2a6 6 0 0 0 0 12z"/>
-                        <path d="M8 11a3 3 0 1 1 0-6 3 3 0 0 1 0 6zm0 1A4 4 0 1 0 8 4a4 4 0 0 0 0 8z"/>
-                        <path d="M9.5 8a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0z"/>
-                      </svg>
-                    </button>
-                  </div>
+              <div class="stat-card user-summary-score-card">
+                <div class="stat-label">Credits</div>
+                <div class="stat-value">{{ '{:,.0f}'.format(total_credits) }}</div>
+              </div>
+              <div class="stat-card user-summary-score-card">
+                <div class="stat-label">Tokens</div>
+                <div class="stat-value">{{ '{:,.0f}'.format(totals_by_unit.get('tokens', 0.0)) }}</div>
+              </div>
+              <div class="stat-card user-summary-score-card">
+                <div class="stat-label">Messages</div>
+                <div class="stat-value">{{ '{:,.0f}'.format(totals_by_unit.get('counts', 0.0)) }}</div>
+              </div>
+            </div>
+
+            <div class="stat-card optimization-action-card mt-2">
+              <div class="d-flex justify-content-between align-items-center gap-2">
+                <div class="min-w-0">
+                  <div class="stat-label mb-1">Optimization Action</div>
                   {% if optimization_user %}
-                  <div class="d-flex flex-column h-100">
-                    <div>
-                      <div class="stat-value" style="font-size:1rem;">{{ optimization_user.recommended_action | fmt_status }}</div>
-                      <div class="text-muted small mt-1">
-                        {{ optimization_user.review_priority }}<br>
-                        {{ optimization_user.latest_governance_tier }} &rarr; {{ optimization_user.recommended_tier }}
-                      </div>
-                    </div>
+                  <div class="stat-value">{{ optimization_user.recommended_action | fmt_status }}</div>
+                  <div class="text-muted small">
+                    {{ optimization_user.review_priority }} &middot; {{ optimization_user.latest_governance_tier }} &rarr; {{ optimization_user.recommended_tier }}
                   </div>
                   {% else %}
-                  <div class="d-flex flex-column h-100">
-                    <div>
-                      <div class="stat-value" style="font-size:1rem;">No Recommendation</div>
-                      <div class="text-muted small mt-1">No matching optimization row</div>
-                    </div>
-                  </div>
+                  <div class="stat-value">No Recommendation</div>
+                  <div class="text-muted small">No matching optimization row</div>
                   {% endif %}
+                </div>
+                <button class="btn btn-outline-primary btn-sm py-0 px-1 flex-shrink-0" type="button"
+                        title="View optimization" aria-label="View optimization"
+                        onclick="document.getElementById('optimization-tab').click()">
+                  <svg width="13" height="13" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true">
+                    <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/>
+                    <path d="M8 13A5 5 0 1 1 8 3a5 5 0 0 1 0 10zm0 1A6 6 0 1 0 8 2a6 6 0 0 0 0 12z"/>
+                    <path d="M8 11a3 3 0 1 1 0-6 3 3 0 0 1 0 6zm0 1A4 4 0 1 0 8 4a4 4 0 0 0 0 8z"/>
+                    <path d="M9.5 8a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0z"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right: charts -->
+          <div class="col-xl-8 col-lg-7">
+            <div class="row g-3">
+              <div class="col-xl-6">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                  <div class="hero-chart-label mb-0">Credits by type / week</div>
+                  <div class="d-flex gap-1">
+                    <button class="btn btn-outline-secondary btn-sm py-0 px-1" style="font-size:.7rem;" title="Export PNG"  onclick="window.userWeeklyBNL && window.userWeeklyBNL.exportPNG()">&#8681;</button>
+                    <button class="btn btn-outline-secondary btn-sm py-0 px-1" style="font-size:.7rem;" title="Fullscreen"  onclick="window.userWeeklyBNL && window.userWeeklyBNL.openFullscreen()">&#9974;</button>
+                  </div>
+                </div>
+                <div class="user-summary-chart-box">
+                  <canvas id="userWeeklyChart"></canvas>
+                </div>
+              </div>
+
+              <div class="col-xl-6">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                  <div class="hero-chart-label mb-0">By usage type</div>
+                  <div class="d-flex gap-1">
+                    <button class="btn btn-outline-secondary btn-sm py-0 px-1" style="font-size:.7rem;" title="Export PNG"  onclick="window.userTypeBNL && window.userTypeBNL.exportPNG()">&#8681;</button>
+                    <button class="btn btn-outline-secondary btn-sm py-0 px-1" style="font-size:.7rem;" title="Fullscreen"  onclick="window.userTypeBNL && window.userTypeBNL.openFullscreen()">&#9974;</button>
+                  </div>
+                </div>
+                <div class="user-summary-chart-box">
+                  <canvas id="userTypeChart"></canvas>
                 </div>
               </div>
             </div>
-          </div>
-
-          <!-- Middle: credits by usage type per week (stacked) -->
-          <div class="col-md-3">
-            <div class="d-flex justify-content-between align-items-center mb-1">
-              <div class="hero-chart-label mb-0">Credits by type / week</div>
-              <div class="d-flex gap-1">
-                <button class="btn btn-outline-secondary btn-sm py-0 px-1" style="font-size:.7rem;" title="Export PNG"  onclick="window.userWeeklyBNL && window.userWeeklyBNL.exportPNG()">&#8681;</button>
-                <button class="btn btn-outline-secondary btn-sm py-0 px-1" style="font-size:.7rem;" title="Fullscreen"  onclick="window.userWeeklyBNL && window.userWeeklyBNL.openFullscreen()">&#9974;</button>
-              </div>
-            </div>
-            <div style="position:relative; height:190px;">
-              <canvas id="userWeeklyChart"></canvas>
-            </div>
-          </div>
-
-          <!-- Right: credits by usage type donut -->
-          <div class="col-md-4">
-            <div class="d-flex justify-content-between align-items-center mb-1">
-              <div class="hero-chart-label mb-0">By usage type</div>
-              <div class="d-flex gap-1">
-                <button class="btn btn-outline-secondary btn-sm py-0 px-1" style="font-size:.7rem;" title="Export PNG"  onclick="window.userTypeBNL && window.userTypeBNL.exportPNG()">&#8681;</button>
-                <button class="btn btn-outline-secondary btn-sm py-0 px-1" style="font-size:.7rem;" title="Fullscreen"  onclick="window.userTypeBNL && window.userTypeBNL.openFullscreen()">&#9974;</button>
-              </div>
-            </div>
-            <canvas id="userTypeChart" height="160"></canvas>
           </div>
 
         </div>
@@ -370,7 +355,11 @@
             <div class="muted-help mb-3">
               Source: <strong>{{ optimization_source }}</strong>
               {% if optimization_source == 'current project records' %}
-              <span class="field-badge ms-2">Baseline tier assumed</span>
+                {% if optimization_assigned_tier_count %}
+                <span class="field-badge ms-2">{{ "{:,}".format(optimization_assigned_tier_count) }} assigned tier{{ "" if optimization_assigned_tier_count == 1 else "s" }} applied</span>
+                {% else %}
+                <span class="field-badge ms-2">Baseline tier assumed</span>
+                {% endif %}
               {% endif %}
             </div>
 
@@ -604,7 +593,9 @@
                   {% for r in rows_data %}
                   <tr>
                     {% for col in display_columns %}
-                    <td title="{{ r[col] }}">{{ r[col] }}</td>
+                    <td title="{{ r[col] }}">
+                      {% if col == 'usage_units' and r[col] == 'counts' %}messages{% else %}{{ r[col] }}{% endif %}
+                    </td>
                     {% endfor %}
                   </tr>
                   {% else %}
@@ -635,7 +626,7 @@
         const canvas = document.getElementById('userWeeklyChart');
         if (!canvas) return;
         if (!data.weeks || data.weeks.length === 0) {
-          canvas.closest('.col-md-4').querySelector('.hero-chart-label').textContent = 'No date data';
+          canvas.closest('[class*="col-"]').querySelector('.hero-chart-label').textContent = 'No date data';
           canvas.style.display = 'none';
           return;
         }
@@ -650,7 +641,7 @@
         if (!canvas) return;
 
         if (types.length === 0) {
-          canvas.closest('.col-md-4').querySelector('.hero-chart-label').textContent = 'No type data';
+          canvas.closest('[class*="col-"]').querySelector('.hero-chart-label').textContent = 'No type data';
           canvas.style.display = 'none';
           return;
         }

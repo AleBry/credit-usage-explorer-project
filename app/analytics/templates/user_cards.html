@@ -244,7 +244,7 @@
               <th class="num">Records</th>
               <th class="num">Credits</th>
               <th class="num">Tokens</th>
-              <th class="num">Counts</th>
+              <th class="num">Messages</th>
             </tr>
           </thead>
           <tbody>
@@ -321,7 +321,7 @@
                 </div>
                 {% if u.total_counts is defined and u.total_counts %}
                 <div class="metric-row">
-                  <span class="metric-label">Counts</span>
+                  <span class="metric-label">Messages</span>
                   <span class="metric-value">{{ '{:,.0f}'.format(u.total_counts) }}</span>
                 </div>
                 {% endif %}

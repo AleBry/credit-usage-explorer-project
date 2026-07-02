@@ -19,7 +19,11 @@
   {% set s = result.latest_summary %}
   <div class="muted-help mb-3">
     Source: <strong>{{ result.source_label }}</strong>
+    {% if assigned_tier_count %}
+    <span class="field-badge ms-2">{{ "{:,}".format(assigned_tier_count) }} assigned tier{{ "" if assigned_tier_count == 1 else "s" }} applied</span>
+    {% else %}
     <span class="field-badge ms-2">Baseline tier assumed</span>
+    {% endif %}
   </div>
 
   <div class="row g-3 mb-3">
@@ -197,7 +201,7 @@
         <thead>
           <tr>
             <th>User</th>
-            <th>Current</th>
+            <th>Current tier</th>
             <th>Recommended</th>
             <th>Action</th>
             <th>Priority</th>
@@ -219,7 +223,23 @@
                 ) }}">{{ r.latest_name or r.email }}</a>
               <div class="text-muted small">{{ r.email }}</div>
             </td>
-            <td>{{ r.latest_governance_tier }}</td>
+            <td style="min-width: 150px;">
+              <form class="tier-switch-form" method="post" action="{{ url_for('optimization.update_user_tier') }}">
+                <input type="hidden" name="email" value="{{ r.email }}">
+                <input type="hidden" name="next" value="{{ return_to }}">
+                <select class="form-select form-select-sm" name="tier" aria-label="Current tier for {{ r.latest_name or r.email }}">
+                  <option value="" {% if r.latest_tier_assignment_source != 'assigned' %}selected{% endif %}>Baseline default</option>
+                  {% for t in available_tiers %}
+                  <option value="{{ t }}" {% if r.latest_tier_assignment_source == 'assigned' and r.latest_governance_tier == t %}selected{% endif %}>{{ t }}</option>
+                  {% endfor %}
+                </select>
+                {% if r.latest_tier_assignment_source == 'assigned' %}
+                <div class="text-muted small mt-1">assigned</div>
+                {% else %}
+                <div class="text-muted small mt-1">default</div>
+                {% endif %}
+              </form>
+            </td>
             <td>{{ r.recommended_tier }}</td>
             <td>{{ r.recommended_action | fmt_status }}</td>
             <td>{{ r.review_priority }}</td>
@@ -246,6 +266,9 @@
 {% block scripts %}
 <script>
   document.querySelectorAll('select[name="action"], select[name="priority"], select[name="current_tier"], select[name="recommended_tier"]').forEach(function (el) {
+    el.addEventListener('change', function () { el.closest('form').submit(); });
+  });
+  document.querySelectorAll('.tier-switch-form select[name="tier"]').forEach(function (el) {
     el.addEventListener('change', function () { el.closest('form').submit(); });
   });
 </script>
