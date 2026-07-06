@@ -478,36 +478,41 @@ th[data-col]:hover .sort-indicator { opacity: .55; }
 .optimization-tier-table td:nth-child(3) { width: 22%; }
 .optimization-tier-table th:nth-child(4),
 .optimization-tier-table td:nth-child(4) { width: 18%; }
-.optimization-actions-table th,
-.optimization-actions-table td {
+/* Override .records-table's nowrap (same specificity, later in file wins) so
+   long tier/action/trend labels wrap inside their cells instead of spilling
+   into the next column, and reclaim the wide header padding. */
+.optimization-actions-table thead th,
+.optimization-actions-table tbody td {
   white-space: normal;
   overflow-wrap: anywhere;
   vertical-align: middle;
-}
-.optimization-actions-table td:nth-child(1) {
-  white-space: normal;
+  padding-left: 0.6rem;
+  padding-right: 0.6rem;
+  line-height: 1.25;
 }
 .optimization-actions-table {
-  min-width: 1180px;
+  /* Fixed layout at 100% width fits the card with no horizontal scroll;
+     long tier/action labels wrap within their cells instead. */
+  min-width: 0;
 }
 .optimization-actions-table th:nth-child(1),
-.optimization-actions-table td:nth-child(1) { width: 13%; }
+.optimization-actions-table td:nth-child(1) { width: 12%; }
 .optimization-actions-table th:nth-child(2),
-.optimization-actions-table td:nth-child(2) { width: 13%; }
+.optimization-actions-table td:nth-child(2) { width: 20%; }
 .optimization-actions-table th:nth-child(3),
-.optimization-actions-table td:nth-child(3) { width: 15%; }
+.optimization-actions-table td:nth-child(3) { width: 14%; }
 .optimization-actions-table th:nth-child(4),
-.optimization-actions-table td:nth-child(4) { width: 12%; }
+.optimization-actions-table td:nth-child(4) { width: 13%; }
 .optimization-actions-table th:nth-child(5),
-.optimization-actions-table td:nth-child(5) { width: 9%; }
+.optimization-actions-table td:nth-child(5) { width: 11%; }
 .optimization-actions-table th:nth-child(6),
-.optimization-actions-table td:nth-child(6) { width: 8%; }
+.optimization-actions-table td:nth-child(6) { width: 7%; }
 .optimization-actions-table th:nth-child(7),
-.optimization-actions-table td:nth-child(7) { width: 8%; }
+.optimization-actions-table td:nth-child(7) { width: 7%; }
 .optimization-actions-table th:nth-child(8),
-.optimization-actions-table td:nth-child(8) { width: 8%; }
+.optimization-actions-table td:nth-child(8) { width: 7%; }
 .optimization-actions-table th:nth-child(9),
-.optimization-actions-table td:nth-child(9) { width: 14%; }
+.optimization-actions-table td:nth-child(9) { width: 9%; }
 .tier-switch-form select {
   width: 100%;
 }

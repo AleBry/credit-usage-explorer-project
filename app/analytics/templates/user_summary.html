@@ -22,6 +22,12 @@
           <div class="col-xl-4 col-lg-5">
             <div class="user-name-hero">{{ name or email or 'User' }}</div>
 
+            {% if has_codex_access %}
+            <div class="mb-1">
+              <span class="badge bg-info text-dark" title="This user belongs to a Codex group. Codex is treated as product access, not a credit tier.">&#129302; Codex access</span>
+            </div>
+            {% endif %}
+
             {% if email and email != name %}
             <div class="user-detail"><span class="label">Email:</span> {{ email }}</div>
             {% endif %}

@@ -2,12 +2,33 @@ from __future__ import annotations
 
 from datetime import date
 from io import StringIO
+from urllib.parse import urlencode
 import re
 
 import pandas as pd
 from flask import Blueprint, Response, flash, redirect, render_template, request, url_for
 
-from .service import build_optimization_result, tier_caps
+from .service import (
+    build_optimization_result,
+    is_codex_access_tier,
+    resolve_governance_assignments,
+    tier_caps,
+)
+
+# Map each sortable table column to the underlying recommendations DataFrame
+# column. Priority sorts by the numeric action rank so the most actionable rows
+# lead, rather than alphabetically by label.
+RECOMMENDATION_SORT_COLUMNS = {
+    "user": "latest_name",
+    "current_tier": "latest_governance_tier",
+    "recommended": "recommended_tier",
+    "action": "recommended_action",
+    "priority": "action_priority_rank",
+    "latest_util": "latest_cap_utilization",
+    "avg_weekly": "avg_weekly_credits_used",
+    "cap_change": "recommended_cap_change",
+    "trend": "pressure_trend",
+}
 
 
 def create_optimization_blueprint(services) -> Blueprint:
@@ -16,11 +37,15 @@ def create_optimization_blueprint(services) -> Blueprint:
     bp = Blueprint("optimization", __name__, template_folder="templates", url_prefix="")
 
     def _result():
-        return build_optimization_result(
-            store.data.df,
-            config_svc.load_tiers(),
+        tier_cfg = config_svc.load_tiers()
+        # Codex groups are product access, not credit tiers — resolve them to the
+        # user's real governance tier so they don't skew the optimization math.
+        assignments = resolve_governance_assignments(
             config_svc.load_user_tiers(),
+            config_svc.load_user_tier_history(),
+            tier_caps(tier_cfg),
         )
+        return build_optimization_result(store.data.df, tier_cfg, assignments)
 
     def _slug(value: object, max_chars: int = 36) -> str:
         text = str(value or "").strip().lower()
@@ -82,6 +107,36 @@ def create_optimization_blueprint(services) -> Blueprint:
 
         return df, state
 
+    def _sort_recommendations(df: pd.DataFrame):
+        """Sort by a clicked column (numeric-aware), like the Records table."""
+        sort_by = request.args.get("sort_by", "").strip()
+        sort_order = request.args.get("sort_order", "asc").strip()
+        if sort_order not in {"asc", "desc"}:
+            sort_order = "asc"
+        col = RECOMMENDATION_SORT_COLUMNS.get(sort_by)
+        if not df.empty and col and col in df.columns:
+            numeric = pd.to_numeric(df[col], errors="coerce")
+            if numeric.notna().any():
+                df = df.assign(_sort_key=numeric).sort_values(
+                    "_sort_key", ascending=(sort_order == "asc"), na_position="last"
+                ).drop(columns="_sort_key")
+            else:
+                df = df.sort_values(
+                    col, ascending=(sort_order == "asc"), na_position="last",
+                    key=lambda s: s.astype(str).str.lower(),
+                )
+        return df, sort_by, sort_order
+
+    def _sort_urls(sort_by: str, sort_order: str) -> dict:
+        """Per-column links that toggle asc/desc and keep the current filters."""
+        urls = {}
+        for key in RECOMMENDATION_SORT_COLUMNS:
+            args = request.args.to_dict(flat=True)
+            args["sort_by"] = key
+            args["sort_order"] = "desc" if (sort_by == key and sort_order == "asc") else "asc"
+            urls[key] = url_for("optimization.optimization_page") + "?" + urlencode(args)
+        return urls
+
     def _csv_response(df: pd.DataFrame, name: str, filters: dict) -> Response:
         parts = [name]
         for key in ("q", "action", "priority", "current_tier", "recommended_tier"):
@@ -110,8 +165,13 @@ def create_optimization_blueprint(services) -> Blueprint:
     def optimization_page() -> str:
         result = _result()
         recommendations, filters = _filter_recommendations(result)
+        recommendations, sort_by, sort_order = _sort_recommendations(recommendations)
+        sort_urls = _sort_urls(sort_by, sort_order)
         tiers = tier_caps(config_svc.load_tiers())
-        available_tiers = [name for name, _ in sorted(tiers.items(), key=lambda item: item[1])]
+        available_tiers = [
+            name for name, _ in sorted(tiers.items(), key=lambda item: item[1])
+            if not is_codex_access_tier(name)
+        ]
         assigned_tier_count = len(config_svc.load_user_tiers())
 
         source = result.recommendations
@@ -135,6 +195,9 @@ def create_optimization_blueprint(services) -> Blueprint:
             available_tiers=available_tiers,
             tier_editing_locked=config_svc.is_tier_editing_locked(),
             assigned_tier_count=assigned_tier_count,
+            sort_by=sort_by,
+            sort_order=sort_order,
+            sort_urls=sort_urls,
             return_to=request.full_path,
             rec_summary=result.recommendation_summary.to_dict(orient="records") if not result.recommendation_summary.empty else [],
             tier_summary=result.tier_summary.to_dict(orient="records") if not result.tier_summary.empty else [],
@@ -235,6 +298,7 @@ def create_optimization_blueprint(services) -> Blueprint:
     def optimization_export_csv() -> Response:
         result = _result()
         recommendations, filters = _filter_recommendations(result)
+        recommendations, _, _ = _sort_recommendations(recommendations)
         return _csv_response(recommendations, "optimization_recommendations", filters)
 
     return bp

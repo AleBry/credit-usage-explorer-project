@@ -391,12 +391,26 @@ def create_analytics_blueprint(services) -> Blueprint:
         optimization_tier_moves = []
         optimization_source = ""
         optimization_assigned_tier_count = 0
+        has_codex_access = False
         try:
-            from app.optimization.service import build_optimization_result
+            from app.optimization.service import (
+                build_optimization_result,
+                is_codex_access_tier,
+                resolve_governance_assignments,
+                tier_caps,
+            )
 
-            opt = build_optimization_result(d.df, config_svc.load_tiers(), config_svc.load_user_tiers())
+            tier_cfg = config_svc.load_tiers()
+            raw_assignments = config_svc.load_user_tiers()
+            tier_histories = config_svc.load_user_tier_history()
+            # Codex groups are product access, not credit tiers — resolve them out
+            # of governance so a user's real credit tier drives the recommendation.
+            governance_assignments = resolve_governance_assignments(
+                raw_assignments, tier_histories, tier_caps(tier_cfg)
+            )
+            opt = build_optimization_result(d.df, tier_cfg, governance_assignments)
             optimization_source = opt.source_label
-            optimization_assigned_tier_count = len(config_svc.load_user_tiers())
+            optimization_assigned_tier_count = len(raw_assignments)
             rec = opt.recommendations
             if rec is not None and not rec.empty:
                 if email and "email" in rec.columns:
@@ -408,11 +422,13 @@ def create_analytics_blueprint(services) -> Blueprint:
                 if not matches.empty:
                     optimization_user = matches.iloc[0].fillna("").to_dict()
 
-            tier_histories = config_svc.load_user_tier_history()
             tier_history_key = (email or "").strip().lower()
             if not tier_history_key and optimization_user:
                 tier_history_key = str(optimization_user.get("email", "")).strip().lower()
             optimization_tier_history = tier_histories.get(tier_history_key, [])
+            has_codex_access = is_codex_access_tier(raw_assignments.get(tier_history_key, "")) or any(
+                is_codex_access_tier(t) for t in optimization_tier_history
+            )
             if len(optimization_tier_history) > 1:
                 optimization_tier_moves = [
                     {
@@ -446,6 +462,7 @@ def create_analytics_blueprint(services) -> Blueprint:
             optimization_tier_moves = []
             optimization_source = ""
             optimization_assigned_tier_count = 0
+            has_codex_access = False
         optimization_page_available = "optimization.optimization_page" in current_app.view_functions
 
         return render_template(
@@ -494,6 +511,7 @@ def create_analytics_blueprint(services) -> Blueprint:
             optimization_assigned_tier_count=optimization_assigned_tier_count,
             optimization_page_available=optimization_page_available,
             tier_editing_locked=config_svc.is_tier_editing_locked(),
+            has_codex_access=has_codex_access,
         )
 
     @bp.route("/user-cards", methods=["GET"])

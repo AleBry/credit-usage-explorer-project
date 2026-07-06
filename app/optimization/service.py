@@ -36,6 +36,46 @@ def tier_caps(tier_config: dict) -> dict[str, float]:
     return caps
 
 
+def is_codex_access_tier(tier: object) -> bool:
+    """Codex groups grant product access, not a credit-governance tier.
+
+    They surface as a "Codex access" badge on the user profile and are excluded
+    from optimization tier math so they never override a user's real credit tier.
+    """
+    return str(tier or "").strip().lower().startswith("codex")
+
+
+def resolve_governance_assignments(
+    assignments: dict[str, str] | None,
+    histories: dict[str, list[str]] | None,
+    caps: dict[str, float],
+) -> dict[str, str]:
+    """Drop Codex-access tiers from governance assignments.
+
+    When a user's assigned tier is a Codex access flag, fall back to their most
+    recent real (non-Codex) tier from the tierlist history. If they have none,
+    they are omitted so downstream treats them as Baseline default.
+    """
+    histories = histories or {}
+    resolved: dict[str, str] = {}
+    for email, tier in (assignments or {}).items():
+        key = str(email).strip().lower()
+        if not key:
+            continue
+        if not is_codex_access_tier(tier):
+            resolved[key] = str(tier).strip()
+            continue
+        real = ""
+        for past in reversed(histories.get(key, [])):
+            candidate = str(past).strip()
+            if candidate and not is_codex_access_tier(candidate) and candidate in caps:
+                real = candidate
+                break
+        if real:
+            resolved[key] = real
+    return resolved
+
+
 def _recommendation_tiers(caps: dict[str, float]) -> dict[str, float]:
     preferred = [
         "Baseline",
