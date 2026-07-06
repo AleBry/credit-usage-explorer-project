@@ -36,14 +36,56 @@ def tier_caps(tier_config: dict) -> dict[str, float]:
     return caps
 
 
+def _recommendation_tiers(caps: dict[str, float]) -> dict[str, float]:
+    preferred = [
+        "Baseline",
+        "Advanced Credit Users",
+        "High Credit Consumption Users",
+        "One K Credit Users",
+        "Emergency Credit Users",
+    ]
+    ladder = {name: caps[name] for name in preferred if name in caps}
+    if len(ladder) >= 2:
+        return ladder
+
+    baseline_cap = caps.get("Baseline", min(caps.values()) if caps else 100.0)
+    credit_tiers = {
+        name: cap
+        for name, cap in caps.items()
+        if name == "Baseline" or (cap > baseline_cap and ("Credit" in name or "One K" in name))
+    }
+    return credit_tiers or caps
+
+
+def _tier_at_cap(candidates: dict[str, float], target_cap: float) -> tuple[str, float]:
+    matches = [(name, cap) for name, cap in candidates.items() if cap == target_cap]
+    order = {
+        "Baseline": 0,
+        "Advanced Credit Users": 1,
+        "High Credit Consumption Users": 2,
+        "One K Credit Users": 3,
+        "Emergency Credit Users": 4,
+    }
+    return sorted(matches, key=lambda item: (order.get(item[0], 99), item[0]))[0]
+
+
 def next_tier(current: str, caps: dict[str, float], direction: int) -> tuple[str, float]:
-    ordered = sorted(caps.items(), key=lambda item: item[1])
-    names = [name for name, _ in ordered]
-    if current not in names:
-        current = "Baseline"
-    idx = names.index(current)
-    idx = max(0, min(len(ordered) - 1, idx + direction))
-    return ordered[idx]
+    if not caps:
+        return ("Baseline", 100.0)
+    current = current if current in caps else "Baseline"
+    current_cap = caps.get(current, caps.get("Baseline", min(caps.values())))
+    if direction == 0:
+        return (current, current_cap)
+
+    ladder = _recommendation_tiers(caps)
+    ladder_caps = sorted(set(ladder.values()))
+    if direction > 0:
+        higher = [cap for cap in ladder_caps if cap > current_cap]
+        return _tier_at_cap(ladder, higher[0]) if higher else (current, current_cap)
+
+    lower = [cap for cap in ladder_caps if cap < current_cap]
+    return _tier_at_cap(ladder, lower[-1]) if lower else (current, current_cap)
+
 
 
 def pressure_flag(utilization: float) -> str:

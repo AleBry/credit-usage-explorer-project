@@ -480,10 +480,36 @@ th[data-col]:hover .sort-indicator { opacity: .55; }
 .optimization-tier-table td:nth-child(4) { width: 18%; }
 .optimization-actions-table th,
 .optimization-actions-table td {
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  vertical-align: middle;
 }
 .optimization-actions-table td:nth-child(1) {
   white-space: normal;
+}
+.optimization-actions-table {
+  min-width: 1180px;
+}
+.optimization-actions-table th:nth-child(1),
+.optimization-actions-table td:nth-child(1) { width: 13%; }
+.optimization-actions-table th:nth-child(2),
+.optimization-actions-table td:nth-child(2) { width: 13%; }
+.optimization-actions-table th:nth-child(3),
+.optimization-actions-table td:nth-child(3) { width: 15%; }
+.optimization-actions-table th:nth-child(4),
+.optimization-actions-table td:nth-child(4) { width: 12%; }
+.optimization-actions-table th:nth-child(5),
+.optimization-actions-table td:nth-child(5) { width: 9%; }
+.optimization-actions-table th:nth-child(6),
+.optimization-actions-table td:nth-child(6) { width: 8%; }
+.optimization-actions-table th:nth-child(7),
+.optimization-actions-table td:nth-child(7) { width: 8%; }
+.optimization-actions-table th:nth-child(8),
+.optimization-actions-table td:nth-child(8) { width: 8%; }
+.optimization-actions-table th:nth-child(9),
+.optimization-actions-table td:nth-child(9) { width: 14%; }
+.tier-switch-form select {
+  width: 100%;
 }
 
 .filter-bar {

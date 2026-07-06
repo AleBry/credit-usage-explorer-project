@@ -133,19 +133,28 @@ def create_optimization_blueprint(services) -> Blueprint:
             filters=filters,
             actionable=actionable,
             available_tiers=available_tiers,
+            tier_editing_locked=config_svc.is_tier_editing_locked(),
             assigned_tier_count=assigned_tier_count,
             return_to=request.full_path,
             rec_summary=result.recommendation_summary.to_dict(orient="records") if not result.recommendation_summary.empty else [],
             tier_summary=result.tier_summary.to_dict(orient="records") if not result.tier_summary.empty else [],
         )
 
+    def _safe_next(default_endpoint: str = "optimization.optimization_page") -> str:
+        next_url = request.form.get("next", "") or url_for(default_endpoint)
+        if not next_url.startswith("/"):
+            next_url = url_for(default_endpoint)
+        return next_url
+
     @bp.route("/optimization/user-tier", methods=["POST"])
     def update_user_tier() -> object:
         email = request.form.get("email", "").strip().lower()
         tier = request.form.get("tier", "").strip()
-        next_url = request.form.get("next", "") or url_for("optimization.optimization_page")
-        if not next_url.startswith("/"):
-            next_url = url_for("optimization.optimization_page")
+        next_url = _safe_next()
+
+        if config_svc.is_tier_editing_locked():
+            flash("Tier editing is locked. Unlock it in Settings to change tiers.", "warning")
+            return redirect(next_url)
 
         tiers = tier_caps(config_svc.load_tiers())
         assignments = config_svc.load_user_tiers()
@@ -163,6 +172,43 @@ def create_optimization_blueprint(services) -> Blueprint:
             assignments.pop(email, None)
             flash(f"Tier reset to Baseline default for {email}.", "success")
         config_svc.save_user_tiers(assignments)
+        return redirect(next_url)
+
+    @bp.route("/optimization/user-tier/reset", methods=["POST"])
+    def reset_user_tier() -> object:
+        """Restore a user's tier to the value from the imported tierlist.
+
+        Manual tier changes only overwrite ``user_tier_assignments.json``; the
+        tierlist import also records ``user_tier_history.json``, so the last
+        entry there is the original tierlist assignment we reset back to.
+        """
+        email = request.form.get("email", "").strip().lower()
+        next_url = _safe_next()
+        if not email:
+            flash("No user selected for tier reset.", "warning")
+            return redirect(next_url)
+
+        tiers = tier_caps(config_svc.load_tiers())
+        assignments = config_svc.load_user_tiers()
+        history = config_svc.load_user_tier_history().get(email, [])
+        tierlist_tier = history[-1] if history else ""
+
+        if tierlist_tier and tierlist_tier in tiers:
+            assignments[email] = tierlist_tier
+            config_svc.save_user_tiers(assignments)
+            flash(f"Tier for {email} reset to tierlist value: {tierlist_tier}.", "success")
+        elif tierlist_tier:
+            assignments.pop(email, None)
+            config_svc.save_user_tiers(assignments)
+            flash(
+                f"Tierlist tier '{tierlist_tier}' for {email} is not in the current "
+                f"policy; reset to Baseline default.",
+                "warning",
+            )
+        else:
+            assignments.pop(email, None)
+            config_svc.save_user_tiers(assignments)
+            flash(f"No tierlist entry for {email}; reset to Baseline default.", "success")
         return redirect(next_url)
 
     @bp.route("/optimization/export.csv", methods=["GET"])

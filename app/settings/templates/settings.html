@@ -472,6 +472,62 @@
       <div class="settings-section">
 
         <h5>Tier Policy</h5>
+        <div class="alert alert-light border py-2 px-3 mb-3">
+          <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <div class="small">
+              <strong>User tier assignments:</strong>
+              {{ "{:,}".format(user_tier_count or 0) }}
+              {% if user_tier_counts %}
+                <span class="text-muted ms-1">
+                  {% for tier_name, count in user_tier_counts.items() %}
+                    {{ tier_name }}: {{ "{:,}".format(count) }}{% if not loop.last %}, {% endif %}
+                  {% endfor %}
+                </span>
+              {% else %}
+                <span class="text-muted ms-1">Optimization currently uses Baseline default where no assignment exists.</span>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+
+        <form method="post" action="{{ url_for('settings.set_tier_lock') }}" class="mb-3">
+          <div class="d-flex align-items-center justify-content-between border rounded-3 px-3 py-2 {{ 'bg-warning-subtle' if tier_editing_locked else 'bg-light' }}">
+            <div class="form-check mb-0">
+              <input class="form-check-input" type="checkbox" name="editing_locked" id="editing_locked"
+                     onchange="this.form.submit()" {% if tier_editing_locked %}checked{% endif %}>
+              <label class="form-check-label" for="editing_locked">
+                <strong>&#128274; Lock tier editing</strong>
+                <span class="text-muted small ms-1">Prevents accidental per-user tier changes on the Optimization and User pages.</span>
+              </label>
+            </div>
+            <span class="badge {{ 'bg-warning text-dark' if tier_editing_locked else 'bg-secondary' }}">
+              {{ 'Locked' if tier_editing_locked else 'Unlocked' }}
+            </span>
+          </div>
+        </form>
+
+        <form method="post" action="{{ url_for('settings.import_tier_assignments') }}" enctype="multipart/form-data" class="mb-3">
+          <div class="row g-2 align-items-end">
+            <div class="col-md-6">
+              <label class="form-label">Import tierlist CSV</label>
+              <input class="form-control form-control-sm" type="file" name="file" accept=".csv" required>
+              <div class="form-text">
+                Uses the email column and the tier/groups column. Serialized groups are reduced to the final group name.
+              </div>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Import mode</label>
+              <select class="form-select form-select-sm" name="import_mode">
+                <option value="merge" selected>Merge/update users</option>
+                <option value="replace">Replace assignments</option>
+              </select>
+            </div>
+            <div class="col-md-3">
+              <button class="btn btn-outline-primary btn-sm w-100" type="submit">Import assignments</button>
+            </div>
+          </div>
+        </form>
+
         <form method="post" action="{{ url_for('settings.update_tiers') }}">
           <div class="table-responsive mb-3">
             <table class="settings-table" id="tier-table">

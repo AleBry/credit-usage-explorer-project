@@ -46,6 +46,7 @@ class AppConfig:
         self.contract_path = config_dir / "contract_config.yaml"
         self.tier_path = config_dir / "tier_policy_config.yaml"
         self.user_tiers_path = config_dir / "user_tier_assignments.json"
+        self.user_tier_history_path = config_dir / "user_tier_history.json"
         self.alert_rules_path = config_dir / "alert_rules.json"
         # Which alert conditions the user has dismissed/read (the navbar bell
         # "inbox"). Persisted server-side so read-state survives across browsers
@@ -89,6 +90,18 @@ class AppConfig:
         with open(self.tier_path, "w", encoding="utf-8") as f:
             yaml.dump(data, f, default_flow_style=False, allow_unicode=True)
 
+    def is_tier_editing_locked(self) -> bool:
+        """True when per-user tier changes are locked to prevent accidental edits."""
+        try:
+            return bool(self.load_tiers().get("editing_locked", False))
+        except Exception:
+            return False
+
+    def set_tier_editing_locked(self, locked: bool) -> None:
+        cfg = self.load_tiers()
+        cfg["editing_locked"] = bool(locked)
+        self.save_tiers(cfg)
+
     def load_user_tiers(self) -> dict[str, str]:
         if not self.user_tiers_path.exists():
             return {}
@@ -114,6 +127,41 @@ class AppConfig:
         self.config_dir.mkdir(parents=True, exist_ok=True)
         self.user_tiers_path.write_text(
             json.dumps({"assignments": dict(sorted(clean.items()))}, indent=2),
+            encoding="utf-8",
+        )
+
+    def load_user_tier_history(self) -> dict[str, list[str]]:
+        if not self.user_tier_history_path.exists():
+            return {}
+        try:
+            data = json.loads(self.user_tier_history_path.read_text(encoding="utf-8"))
+            histories = data.get("histories", data) if isinstance(data, dict) else {}
+            if not isinstance(histories, dict):
+                return {}
+            clean: dict[str, list[str]] = {}
+            for email, tiers in histories.items():
+                if not isinstance(tiers, list):
+                    continue
+                key = str(email).strip().lower()
+                values = [str(tier).strip() for tier in tiers if str(tier).strip()]
+                if key and values:
+                    clean[key] = values
+            return clean
+        except Exception:
+            return {}
+
+    def save_user_tier_history(self, histories: dict[str, list[str]]) -> None:
+        clean: dict[str, list[str]] = {}
+        for email, tiers in histories.items():
+            key = str(email).strip().lower()
+            if not key or not isinstance(tiers, list):
+                continue
+            values = [str(tier).strip() for tier in tiers if str(tier).strip()]
+            if values:
+                clean[key] = values
+        self.config_dir.mkdir(parents=True, exist_ok=True)
+        self.user_tier_history_path.write_text(
+            json.dumps({"histories": dict(sorted(clean.items()))}, indent=2),
             encoding="utf-8",
         )
 

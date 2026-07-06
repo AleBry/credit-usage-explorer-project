@@ -15,10 +15,12 @@ from app.shared.credit_ledger import (
     sync_credit_ledger,
 )
 from app.shared.ingestion import _infer_week_from_filename
+from app.shared.tier_import import read_tier_assignments_csv
 from .service import force_rmtree, try_snapshot
 
 ALLOWED_HISTORICAL = {".xlsx", ".xls", ".csv"}
 ALLOWED_WEEKLY = {".csv"}
+ALLOWED_TIERLIST = {".csv"}
 
 
 def create_settings_blueprint(services) -> Blueprint:
@@ -47,6 +49,10 @@ def create_settings_blueprint(services) -> Blueprint:
             credit_status = None
 
         tiers = config_svc.load_tiers()
+        user_tiers = config_svc.load_user_tiers()
+        user_tier_counts: dict[str, int] = {}
+        for tier in user_tiers.values():
+            user_tier_counts[tier] = user_tier_counts.get(tier, 0) + 1
         pipeline_status = pipeline.status()
         ingested_weeks = pipeline.get_ingested_weeks()
         forecast_history_count = len(pipeline.get_forecast_history())
@@ -59,6 +65,9 @@ def create_settings_blueprint(services) -> Blueprint:
             credit_status=credit_status,
             credit_kind_label=credit_kind_label,
             tiers=tiers,
+            tier_editing_locked=config_svc.is_tier_editing_locked(),
+            user_tier_count=len(user_tiers),
+            user_tier_counts=dict(sorted(user_tier_counts.items())),
             pipeline_status=pipeline_status,
             ingested_weeks=ingested_weeks,
             forecast_history_count=forecast_history_count,
@@ -181,10 +190,87 @@ def create_settings_blueprint(services) -> Blueprint:
                 name = name.strip()
                 if name:
                     tiers_dict[name] = {"weekly_credit_cap": int(float(cap))}
-            config_svc.save_tiers({"tiers": tiers_dict})
+            # Preserve non-tier settings (e.g. the editing lock) already on file.
+            cfg = config_svc.load_tiers()
+            cfg["tiers"] = tiers_dict
+            config_svc.save_tiers(cfg)
             flash("Tier policy saved.", "success")
         except Exception as exc:
             flash(f"Error saving tier policy: {exc}", "danger")
+        return redirect(url_for("settings.settings_page"))
+
+    @bp.route("/tiers/lock", methods=["POST"])
+    def set_tier_lock() -> object:
+        try:
+            locked = "editing_locked" in request.form
+            config_svc.set_tier_editing_locked(locked)
+            if locked:
+                flash("Tier editing locked. Per-user tier changes are now disabled.", "success")
+            else:
+                flash("Tier editing unlocked. Per-user tier changes are allowed.", "success")
+        except Exception as exc:
+            flash(f"Error updating tier lock: {exc}", "danger")
+        return redirect(url_for("settings.settings_page"))
+
+    @bp.route("/tiers/import", methods=["POST"])
+    def import_tier_assignments() -> object:
+        if "file" not in request.files:
+            flash("No tierlist file provided.", "danger")
+            return redirect(url_for("settings.settings_page"))
+
+        file = request.files["file"]
+        if not file.filename:
+            flash("No tierlist file selected.", "danger")
+            return redirect(url_for("settings.settings_page"))
+
+        suffix = Path(file.filename).suffix.lower()
+        if suffix not in ALLOWED_TIERLIST:
+            flash(f"Invalid tierlist file type '{suffix}'. Must be .csv.", "danger")
+            return redirect(url_for("settings.settings_page"))
+
+        try:
+            result = read_tier_assignments_csv(file.stream)
+            if not result.assignments:
+                flash("No tier assignments were found in that CSV.", "warning")
+                return redirect(url_for("settings.settings_page"))
+
+            replace_existing = request.form.get("import_mode") == "replace"
+            assignments = {} if replace_existing else config_svc.load_user_tiers()
+            assignments.update(result.assignments)
+            config_svc.save_user_tiers(assignments)
+            histories = {} if replace_existing else config_svc.load_user_tier_history()
+            histories.update(result.histories)
+            config_svc.save_user_tier_history(histories)
+
+            tier_cfg = config_svc.load_tiers()
+            tiers = tier_cfg.setdefault("tiers", {})
+            baseline_cap = tiers.get("Baseline", {}).get("weekly_credit_cap", 100)
+            cap_overrides = {
+                "Advanced Credit Users": tiers.get("Advanced", {}).get("weekly_credit_cap", 400),
+                "High Credit Consumption Users": tiers.get("Super", {}).get("weekly_credit_cap", 750),
+                "One K Credit Users": tiers.get("Highest", {}).get("weekly_credit_cap", 1000),
+                "Emergency Credit Users": tiers.get("Highest", {}).get("weekly_credit_cap", 1000),
+            }
+            new_tiers = []
+            for tier in sorted(set(result.assignments.values())):
+                if tier not in tiers:
+                    tiers[tier] = {"weekly_credit_cap": int(cap_overrides.get(tier, baseline_cap))}
+                    new_tiers.append(tier)
+            if new_tiers:
+                config_svc.save_tiers(tier_cfg)
+
+            mode = "replaced" if replace_existing else "merged"
+            message = (
+                f"Tierlist imported: {result.imported_rows:,} assignments {mode} "
+                f"from {result.rows:,} rows using '{result.email_column}' and '{result.tier_column}'."
+            )
+            if result.skipped_rows:
+                message += f" Skipped {result.skipped_rows:,} row(s) missing email or tier."
+            if new_tiers:
+                message += f" Added {len(new_tiers):,} new tier label(s) with the Baseline cap."
+            flash(message, "success")
+        except Exception as exc:
+            flash(f"Error importing tierlist: {exc}", "danger")
         return redirect(url_for("settings.settings_page"))
 
     @bp.route("/upload/historical", methods=["POST"])

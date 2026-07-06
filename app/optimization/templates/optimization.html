@@ -227,18 +227,26 @@
               <form class="tier-switch-form" method="post" action="{{ url_for('optimization.update_user_tier') }}">
                 <input type="hidden" name="email" value="{{ r.email }}">
                 <input type="hidden" name="next" value="{{ return_to }}">
-                <select class="form-select form-select-sm" name="tier" aria-label="Current tier for {{ r.latest_name or r.email }}">
+                <select class="form-select form-select-sm" name="tier" aria-label="Current tier for {{ r.latest_name or r.email }}"{% if tier_editing_locked %} disabled title="Tier editing is locked in Settings"{% endif %}>
                   <option value="" {% if r.latest_tier_assignment_source != 'assigned' %}selected{% endif %}>Baseline default</option>
                   {% for t in available_tiers %}
                   <option value="{{ t }}" {% if r.latest_tier_assignment_source == 'assigned' and r.latest_governance_tier == t %}selected{% endif %}>{{ t }}</option>
                   {% endfor %}
                 </select>
-                {% if r.latest_tier_assignment_source == 'assigned' %}
-                <div class="text-muted small mt-1">assigned</div>
-                {% else %}
-                <div class="text-muted small mt-1">default</div>
-                {% endif %}
+                <div class="text-muted small mt-1">
+                  {% if tier_editing_locked %}&#128274; locked
+                  {% elif r.latest_tier_assignment_source == 'assigned' %}assigned
+                  {% else %}default{% endif %}
+                </div>
               </form>
+              {% if r.latest_tier_assignment_source == 'assigned' %}
+              <form method="post" action="{{ url_for('optimization.reset_user_tier') }}" class="mt-1">
+                <input type="hidden" name="email" value="{{ r.email }}">
+                <input type="hidden" name="next" value="{{ return_to }}">
+                <button type="submit" class="btn btn-link btn-sm p-0 text-decoration-none"
+                        title="Reset this user to the imported tierlist value">&#8634; Reset to tierlist</button>
+              </form>
+              {% endif %}
             </td>
             <td>{{ r.recommended_tier }}</td>
             <td>{{ r.recommended_action | fmt_status }}</td>

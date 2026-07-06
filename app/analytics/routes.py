@@ -387,6 +387,8 @@ def create_analytics_blueprint(services) -> Blueprint:
 
         optimization_user = None
         optimization_history = []
+        optimization_tier_history = []
+        optimization_tier_moves = []
         optimization_source = ""
         optimization_assigned_tier_count = 0
         try:
@@ -406,6 +408,22 @@ def create_analytics_blueprint(services) -> Blueprint:
                 if not matches.empty:
                     optimization_user = matches.iloc[0].fillna("").to_dict()
 
+            tier_histories = config_svc.load_user_tier_history()
+            tier_history_key = (email or "").strip().lower()
+            if not tier_history_key and optimization_user:
+                tier_history_key = str(optimization_user.get("email", "")).strip().lower()
+            optimization_tier_history = tier_histories.get(tier_history_key, [])
+            if len(optimization_tier_history) > 1:
+                optimization_tier_moves = [
+                    {
+                        "previous_tier": optimization_tier_history[idx - 1],
+                        "new_tier": optimization_tier_history[idx],
+                        "is_current": idx == len(optimization_tier_history) - 1,
+                    }
+                    for idx in range(1, len(optimization_tier_history))
+                    if optimization_tier_history[idx - 1] != optimization_tier_history[idx]
+                ]
+
             hist = opt.user_week_history
             if hist is not None and not hist.empty:
                 if email and "email" in hist.columns:
@@ -424,6 +442,8 @@ def create_analytics_blueprint(services) -> Blueprint:
         except Exception:
             optimization_user = None
             optimization_history = []
+            optimization_tier_history = []
+            optimization_tier_moves = []
             optimization_source = ""
             optimization_assigned_tier_count = 0
         optimization_page_available = "optimization.optimization_page" in current_app.view_functions
@@ -468,9 +488,12 @@ def create_analytics_blueprint(services) -> Blueprint:
             type_chart_json=type_chart_json,
             optimization_user=optimization_user,
             optimization_history=optimization_history,
+            optimization_tier_history=optimization_tier_history,
+            optimization_tier_moves=optimization_tier_moves,
             optimization_source=optimization_source,
             optimization_assigned_tier_count=optimization_assigned_tier_count,
             optimization_page_available=optimization_page_available,
+            tier_editing_locked=config_svc.is_tier_editing_locked(),
         )
 
     @bp.route("/user-cards", methods=["GET"])
