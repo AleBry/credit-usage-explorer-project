@@ -53,6 +53,20 @@ def create_settings_blueprint(services) -> Blueprint:
         user_tier_counts: dict[str, int] = {}
         for tier in user_tiers.values():
             user_tier_counts[tier] = user_tier_counts.get(tier, 0) + 1
+
+        # Manual overrides = users whose current tier differs from the value a
+        # "reset to tierlist" would restore (their last imported tier, if any).
+        tier_histories = config_svc.load_user_tier_history()
+        tier_overrides = []
+        for email, current in sorted(user_tiers.items()):
+            history = tier_histories.get(email, [])
+            tierlist_tier = history[-1] if history else ""
+            if current != tierlist_tier:
+                tier_overrides.append({
+                    "email": email,
+                    "current_tier": current,
+                    "tierlist_tier": tierlist_tier,
+                })
         pipeline_status = pipeline.status()
         ingested_weeks = pipeline.get_ingested_weeks()
         forecast_history_count = len(pipeline.get_forecast_history())
@@ -66,6 +80,7 @@ def create_settings_blueprint(services) -> Blueprint:
             credit_kind_label=credit_kind_label,
             tiers=tiers,
             tier_editing_locked=config_svc.is_tier_editing_locked(),
+            tier_overrides=tier_overrides,
             user_tier_count=len(user_tiers),
             user_tier_counts=dict(sorted(user_tier_counts.items())),
             pipeline_status=pipeline_status,

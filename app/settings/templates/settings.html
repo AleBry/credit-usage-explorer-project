@@ -528,6 +528,58 @@
           </div>
         </form>
 
+        {# Reset manual tier overrides back to the imported tierlist #}
+        <div class="border rounded-3 p-3 mb-3">
+          <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+            <div>
+              <strong>Reset tiers to tierlist</strong>
+              <div class="text-muted small">Restore users you manually changed back to their imported tierlist value.</div>
+            </div>
+            {% if user_tier_count %}
+            <form method="post" action="{{ url_for('optimization.reset_all_user_tiers') }}"
+                  onsubmit="return confirm('Reset ALL user tiers to the imported tierlist? This discards every manual tier override.');">
+              <input type="hidden" name="next" value="{{ url_for('settings.settings_page') }}">
+              <button type="submit" class="btn btn-outline-danger btn-sm">&#8634; Reset all to tierlist</button>
+            </form>
+            {% endif %}
+          </div>
+
+          {% if tier_overrides %}
+          <p class="text-muted small mb-2">{{ tier_overrides | length }} user{{ '' if tier_overrides | length == 1 else 's' }} currently differ from the tierlist:</p>
+          <div class="table-responsive">
+            <table class="settings-table mb-0">
+              <thead>
+                <tr>
+                  <th>User</th>
+                  <th>Current tier</th>
+                  <th>Tierlist tier</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for o in tier_overrides %}
+                <tr>
+                  <td>{{ o.email }}</td>
+                  <td>{{ o.current_tier }}</td>
+                  <td>{{ o.tierlist_tier or 'Baseline default' }}</td>
+                  <td class="text-end">
+                    <form method="post" action="{{ url_for('optimization.reset_user_tier') }}">
+                      <input type="hidden" name="email" value="{{ o.email }}">
+                      <input type="hidden" name="next" value="{{ url_for('settings.settings_page') }}">
+                      <button type="submit" class="btn btn-outline-secondary btn-sm py-0 px-2"
+                              title="Reset {{ o.email }} to the tierlist value">Reset</button>
+                    </form>
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% else %}
+          <div class="text-muted small">No manual overrides &mdash; every assigned user matches the imported tierlist.</div>
+          {% endif %}
+        </div>
+
         <form method="post" action="{{ url_for('settings.update_tiers') }}">
           <div class="table-responsive mb-3">
             <table class="settings-table" id="tier-table">

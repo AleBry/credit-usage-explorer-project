@@ -211,6 +211,26 @@ def create_optimization_blueprint(services) -> Blueprint:
             flash(f"No tierlist entry for {email}; reset to Baseline default.", "success")
         return redirect(next_url)
 
+    @bp.route("/optimization/user-tier/reset-all", methods=["POST"])
+    def reset_all_user_tiers() -> object:
+        """Discard every manual tier override and rebuild assignments from the
+        imported tierlist history (each user's last recorded tier)."""
+        next_url = _safe_next("settings.settings_page")
+        tiers = tier_caps(config_svc.load_tiers())
+        histories = config_svc.load_user_tier_history()
+        rebuilt = {
+            email: hist[-1]
+            for email, hist in histories.items()
+            if hist and hist[-1] in tiers
+        }
+        config_svc.save_user_tiers(rebuilt)
+        flash(
+            f"Reset all tier assignments to the tierlist: {len(rebuilt):,} user(s) "
+            f"restored, manual overrides discarded.",
+            "success",
+        )
+        return redirect(next_url)
+
     @bp.route("/optimization/export.csv", methods=["GET"])
     def optimization_export_csv() -> Response:
         result = _result()
