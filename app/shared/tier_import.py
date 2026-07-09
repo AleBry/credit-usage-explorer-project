@@ -227,11 +227,16 @@ def read_tier_assignments_csv(file_obj: Any) -> TierImportResult:
         email = str(row.get(email_col, "") or "").strip().lower()
         # The groups cell lists a user's groups oldest-first, most-recent-last.
         # Codex access is product access, not a governance tier, so it's kept
-        # out of the history entirely rather than treated as "their tier".
+        # out of the history entirely rather than treated as "their tier" --
+        # unless it's the ONLY group they have, in which case there is no
+        # other tier to fall back to, so Codex access becomes their tier.
         raw_labels = extract_tier_names(row.get(tier_col, ""))
-        if email and any(is_codex_group_label(label) for label in raw_labels):
+        codex_labels = [label for label in raw_labels if is_codex_group_label(label)]
+        if email and codex_labels:
             codex_access[email] = True
         history = [label for label in raw_labels if not is_codex_group_label(label)]
+        if not history and codex_labels:
+            history = [codex_labels[-1]]
         tiers.update(history)
         tier = history[-1] if history else ""
         if not email or not tier:

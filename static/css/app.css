@@ -337,11 +337,6 @@ body { display: flex; min-height: 100vh; background: var(--bg); color: var(--tex
 .records-table thead th[data-col] { cursor: pointer; user-select: none; }
 .records-table thead th[data-col]:hover { background: var(--border-soft); }
 .records-table thead th.sorted { background: var(--accent-soft); color: var(--ink); }
-.records-table thead th .sort-link {
-  color: inherit;
-  display: block;
-  text-decoration: none;
-}
 .sort-indicator {
   display: inline-block;
   margin-left: .2rem;

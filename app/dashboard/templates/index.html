@@ -11,7 +11,7 @@
       </div>
 
       <!-- SEARCH -->
-      <form method="get" action="{{ url_for('main.records_page') }}">
+      <form method="get" action="{{ url_for('main.records_page') }}" id="records-search-form">
         {% if sort_by %}<input type="hidden" name="sort_by" value="{{ sort_by }}">{% endif %}
         {% if sort_order %}<input type="hidden" name="sort_order" value="{{ sort_order }}">{% endif %}
         <div class="filter-card">
@@ -193,13 +193,10 @@
                 <th
                   class="{% if c.align == 'right' %}text-end{% endif %}{% if sort_by == c.key %} sorted{% endif %}"
                   data-col="{{ c.key }}"
+                  onclick="sortByCol(this)"
                 >
-                  <a class="sort-link" href="{{ sort_urls[c.key] }}">
-                    {{ c.label }}
-                    {% if sort_by == c.key %}
-                    <span class="sort-indicator active">{{ '▲' if sort_order == 'asc' else '▼' }}</span>
-                    {% endif %}
-                  </a>
+                  {{ c.label }}
+                  <span class="sort-indicator">{% if sort_by == c.key %}{{ '&#8593;' if sort_order == 'asc' else '&#8595;' }}{% endif %}</span>
                 </th>
                 {% endfor %}
               </tr>
@@ -237,9 +234,17 @@
 
 {% block scripts %}
     <script src="{{ url_for('static', filename='js/column_grid.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/table_sort.js') }}"></script>
     <script>
       document.querySelectorAll('input[type="date"], select[name="search_field"], select[name="usage_type"], select[name="model"]').forEach(el => {
         el.addEventListener('change', () => el.closest('form').submit());
+      });
+
+      // Client-side table sort (shared with user-summary Records / Optimization)
+      initTableSort({
+        formId: 'records-search-form',
+        initialCol: '{{ sort_by or "" }}',
+        initialOrder: '{{ sort_order or "asc" }}',
       });
     </script>
 {% endblock %}

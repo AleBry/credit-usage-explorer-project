@@ -221,17 +221,6 @@ def create_dashboard_blueprint(services) -> Blueprint:
                 if col in d.df.columns else []
             )
 
-        sort_urls = {}
-        for c in columns:
-            next_order = (
-                "desc"
-                if state["sort_by"] == c["key"] and state["sort_order"] == "asc"
-                else "asc"
-            )
-            sort_urls[c["key"]] = _query_url(
-                "main.records_page", sort_by=c["key"], sort_order=next_order
-            )
-
         return render_template(
             "index.html",
             toggle_columns=[record_column_meta(c) for c in d.columns],
@@ -251,7 +240,6 @@ def create_dashboard_blueprint(services) -> Blueprint:
             model=state["model"],
             sort_by=state["sort_by"],
             sort_order=state["sort_order"],
-            sort_urls=sort_urls,
             export_url=_query_url("main.records_export_csv"),
             usage_type_options=_options("usage_type_parsed_type"),
             model_options=_options("usage_type_model"),

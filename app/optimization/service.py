@@ -169,8 +169,9 @@ def resolve_governance_assignments(
     """Drop Codex-access tiers from governance assignments.
 
     When a user's assigned tier is a Codex access flag, fall back to their most
-    recent real (non-Codex) tier from the tierlist history. If they have none,
-    they are omitted so downstream treats them as Baseline default.
+    recent real (non-Codex) tier from the tierlist history. If they have no
+    other tier at all, Codex access IS their tier -- kept as-is rather than
+    silently dropped to Baseline default.
     """
     histories = histories or {}
     resolved: dict[str, str] = {}
@@ -187,8 +188,7 @@ def resolve_governance_assignments(
             if candidate and not is_codex_access_tier(candidate) and candidate in caps:
                 real = candidate
                 break
-        if real:
-            resolved[key] = real
+        resolved[key] = real or str(tier).strip()
     return resolved
 
 
