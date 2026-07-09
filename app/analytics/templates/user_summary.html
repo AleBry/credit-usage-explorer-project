@@ -3,6 +3,7 @@
 {% block extra_head %}
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script src="{{ url_for('static', filename='js/charts.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/table_sort.js') }}"></script>
 {% endblock %}
 
 {% block body %}
@@ -889,82 +890,12 @@
         }, { exportName: 'User Credits by Usage Type' });
       })();
 
-      // Client-Side Table Sort
-      // Clicking a column header sorts already-rendered rows in-place without a
-      // page reload. Hidden fields (sort_by / sort_order) stay in sync so the
-      // server re-applies the same sort on filter-driven reloads.
-
-      const sortState = {
-        col:   '{{ sort_by or "" }}',
-        order: '{{ sort_order or "asc" }}',
-      };
-
-      function updateIndicators() {
-        document.querySelectorAll('.records-table thead th[data-col]').forEach(th => {
-          const ind = th.querySelector('.sort-indicator');
-          if (!ind) return;
-          if (th.dataset.col === sortState.col) {
-            ind.textContent = sortState.order === 'asc' ? '↑' : '↓';
-            ind.classList.add('active');
-            th.classList.add('sorted');
-          } else {
-            ind.textContent = '';
-            ind.classList.remove('active');
-            th.classList.remove('sorted');
-          }
-        });
-      }
-
-      function sortByCol(th) {
-        const col = th.dataset.col;
-        const idx = Array.from(th.parentElement.children).indexOf(th);
-
-        sortState.order = (sortState.col === col && sortState.order === 'asc') ? 'desc' : 'asc';
-        sortState.col   = col;
-
-        const tbody = th.closest('table').querySelector('tbody');
-        const rows  = Array.from(tbody.rows);
-
-        // Nothing to sort if the only row is the empty-state message.
-        if (rows.length === 1 && rows[0].querySelector('td[colspan]')) return;
-
-        rows.sort((a, b) => {
-          const av = a.cells[idx]?.textContent.trim() ?? '';
-          const bv = b.cells[idx]?.textContent.trim() ?? '';
-          const an = parseFloat(av.replace(/,/g, ''));
-          const bn = parseFloat(bv.replace(/,/g, ''));
-          // Use numeric comparison only when both values are real numbers that differ.
-          // Dates like "2024-06-15" parse to 2024 for every row in the same year, so
-          // if the numbers are equal but the raw strings differ, fall back to
-          // localeCompare which sorts ISO date strings correctly.
-          const cmp = (!isNaN(an) && !isNaN(bn) && an !== bn)
-            ? (an - bn)
-            : av.localeCompare(bv, undefined, { numeric: true, sensitivity: 'base' });
-          return sortState.order === 'asc' ? cmp : -cmp;
-        });
-
-        rows.forEach(r => tbody.appendChild(r));
-        updateIndicators();
-
-        // Keep hidden fields in sync for server-side sort on next filter reload.
-        syncField('sort_by',    sortState.col);
-        syncField('sort_order', sortState.order);
-      }
-
-      function syncField(name, value) {
-        const form = document.getElementById('records-form');
-        let el = form.querySelector(`input[name="${name}"]`);
-        if (!el) {
-          el = document.createElement('input');
-          el.type  = 'hidden';
-          el.name  = name;
-          form.appendChild(el);
-        }
-        el.value = value;
-      }
-
-      // Reflect any server-applied initial sort in the header indicators.
-      updateIndicators();
+      // Client-side table sort (shared with Optimization) -- see table_sort.js
+      initTableSort({
+        formId: 'records-form',
+        initialCol: '{{ sort_by or "" }}',
+        initialOrder: '{{ sort_order or "asc" }}',
+      });
 
       // Filter changes require a server round-trip
       document.addEventListener('change', e => {

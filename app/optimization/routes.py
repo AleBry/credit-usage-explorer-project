@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from datetime import date
 from io import StringIO
-from urllib.parse import urlencode
 import re
 
 import pandas as pd
@@ -127,16 +126,6 @@ def create_optimization_blueprint(services) -> Blueprint:
                 )
         return df, sort_by, sort_order
 
-    def _sort_urls(sort_by: str, sort_order: str) -> dict:
-        """Per-column links that toggle asc/desc and keep the current filters."""
-        urls = {}
-        for key in RECOMMENDATION_SORT_COLUMNS:
-            args = request.args.to_dict(flat=True)
-            args["sort_by"] = key
-            args["sort_order"] = "desc" if (sort_by == key and sort_order == "asc") else "asc"
-            urls[key] = url_for("optimization.optimization_page") + "?" + urlencode(args)
-        return urls
-
     def _csv_response(df: pd.DataFrame, name: str, filters: dict) -> Response:
         parts = [name]
         for key in ("q", "action", "priority", "current_tier", "recommended_tier"):
@@ -166,7 +155,6 @@ def create_optimization_blueprint(services) -> Blueprint:
         result = _result()
         recommendations, filters = _filter_recommendations(result)
         recommendations, sort_by, sort_order = _sort_recommendations(recommendations)
-        sort_urls = _sort_urls(sort_by, sort_order)
         tiers = tier_caps(config_svc.load_tiers())
         available_tiers = [
             name for name, _ in sorted(tiers.items(), key=lambda item: item[1])
@@ -197,7 +185,6 @@ def create_optimization_blueprint(services) -> Blueprint:
             assigned_tier_count=assigned_tier_count,
             sort_by=sort_by,
             sort_order=sort_order,
-            sort_urls=sort_urls,
             return_to=request.full_path,
             rec_summary=result.recommendation_summary.to_dict(orient="records") if not result.recommendation_summary.empty else [],
             tier_summary=result.tier_summary.to_dict(orient="records") if not result.tier_summary.empty else [],

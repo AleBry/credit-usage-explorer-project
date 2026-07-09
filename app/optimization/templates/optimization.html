@@ -3,11 +3,9 @@
 
 {% block body %}
 {% macro sort_th(key, label, align='') %}
-  <th class="{{ 'text-end' if align == 'right' else '' }}{{ ' sorted' if sort_by == key else '' }}" data-col="{{ key }}">
-    <a class="sort-link" href="{{ sort_urls[key] }}">
-      {{ label }}
-      {% if sort_by == key %}<span class="sort-indicator active">{{ '▲' if sort_order == 'asc' else '▼' }}</span>{% endif %}
-    </a>
+  <th class="{{ 'text-end' if align == 'right' else '' }}{{ ' sorted' if sort_by == key else '' }}" data-col="{{ key }}" onclick="sortByCol(this)">
+    {{ label }}
+    <span class="sort-indicator">{% if sort_by == key %}{{ '&#8593;' if sort_order == 'asc' else '&#8595;' }}{% endif %}</span>
   </th>
 {% endmacro %}
 <div class="container py-4" style="max-width: 1280px;">
@@ -129,7 +127,7 @@
     </div>
   </div>
 
-  <form class="section-card mb-3" method="get" action="{{ url_for('optimization.optimization_page') }}">
+  <form class="section-card mb-3" method="get" action="{{ url_for('optimization.optimization_page') }}" id="optimization-filters-form">
     {% if sort_by %}<input type="hidden" name="sort_by" value="{{ sort_by }}">{% endif %}
     {% if sort_order %}<input type="hidden" name="sort_order" value="{{ sort_order }}">{% endif %}
     <h5>Search &amp; Filters</h5>
@@ -243,20 +241,19 @@
               <form class="tier-switch-form" method="post" action="{{ url_for('optimization.update_user_tier') }}">
                 <input type="hidden" name="email" value="{{ r.email }}">
                 <input type="hidden" name="next" value="{{ return_to }}">
-                <select class="form-select form-select-sm" name="tier" aria-label="Current tier for {{ r.latest_name or r.email }}"{% if tier_editing_locked %} disabled title="Tier editing is locked in Settings"{% endif %}>
+                <select class="form-select form-select-sm" name="tier" aria-label="Current tier for {{ r.latest_name or r.email }}"
+                        title="{% if tier_editing_locked %}Tier editing is locked in Settings{% elif r.latest_tier_assignment_source == 'assigned' %}{{ r.latest_governance_tier }}{% else %}Baseline default{% endif %}"
+                        {% if tier_editing_locked %}disabled{% endif %}>
                   <option value="" {% if r.latest_tier_assignment_source != 'assigned' %}selected{% endif %}>Baseline default</option>
                   {% for t in available_tiers %}
                   <option value="{{ t }}" {% if r.latest_tier_assignment_source == 'assigned' and r.latest_governance_tier == t %}selected{% endif %}>{{ t }}</option>
                   {% endfor %}
                 </select>
-                <div class="text-muted small mt-1">
-                  {{ r.latest_tier_assignment_source | fmt_status }}
-                </div>
               </form>
             </td>
             <td>{{ r.recommended_tier }}</td>
             <td>{{ r.recommended_action | fmt_status }}</td>
-            <td>{{ r.review_priority }}</td>
+            <td>{{ r.review_priority | fmt_status }}</td>
             <td class="text-end">{{ "{:.0%}".format(r.latest_cap_utilization) }}</td>
             <td class="text-end">{{ "{:,.0f}".format(r.avg_weekly_credits_used) }}</td>
             <td class="text-end">{{ "{:+,.0f}".format(r.recommended_cap_change) }}</td>
@@ -278,12 +275,20 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="{{ url_for('static', filename='js/table_sort.js') }}"></script>
 <script>
   document.querySelectorAll('select[name="action"], select[name="priority"], select[name="current_tier"], select[name="recommended_tier"]').forEach(function (el) {
     el.addEventListener('change', function () { el.closest('form').submit(); });
   });
   document.querySelectorAll('.tier-switch-form select[name="tier"]').forEach(function (el) {
     el.addEventListener('change', function () { el.closest('form').submit(); });
+  });
+
+  // Client-side table sort (shared with user-summary Records) -- see table_sort.js
+  initTableSort({
+    formId: 'optimization-filters-form',
+    initialCol: '{{ sort_by or "" }}',
+    initialOrder: '{{ sort_order or "asc" }}',
   });
 </script>
 {% endblock %}
