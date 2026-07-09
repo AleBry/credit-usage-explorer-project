@@ -79,8 +79,27 @@ def weeks_per_month_setting(tier_config: dict) -> float | str:
     return wpm or DEFAULT_WEEKS_PER_MONTH
 
 
+def cap_change_date(tier_config: dict) -> pd.Timestamp | None:
+    """Date the workspace switched weekly -> monthly caps, or None."""
+    raw = tier_config.get("cap_period_change_date")
+    if not raw:
+        return None
+    ts = pd.to_datetime(raw, errors="coerce")
+    return None if pd.isna(ts) else ts.normalize()
+
+
 def weeks_per_month(tier_config: dict, week_start: object = None) -> float:
-    """Numeric divisor for this config, resolved for a given week if 'actual'."""
+    """Numeric divisor for this config, resolved for a given week.
+
+    If a weekly->monthly switch date is set, weeks BEFORE it are treated as the
+    old weekly regime: dividing the (monthly) cap by DEFAULT_WEEKS_PER_MONTH
+    recovers the flat pre-switch weekly cap. Weeks on/after use the configured
+    setting (a fixed number or the actual weeks in that month).
+    """
+    change = cap_change_date(tier_config)
+    if change is not None and week_start is not None and not pd.isna(week_start):
+        if pd.Timestamp(week_start).normalize() < change:
+            return DEFAULT_WEEKS_PER_MONTH
     setting = weeks_per_month_setting(tier_config)
     if setting != "actual":
         return float(setting)
@@ -112,6 +131,25 @@ def tier_caps(tier_config: dict, week_start: object = None) -> dict[str, float]:
     if "Baseline" not in caps:
         caps["Baseline"] = min(caps.values()) if caps else 100.0
     return caps
+
+
+def tier_monthly_caps(tier_config: dict) -> dict[str, float]:
+    """Monthly allowance per tier (the inverse view of tier_caps).
+
+    Used for story/pace metrics that compare spend against a whole month's cap.
+    Weekly-period tiers are scaled up by the representative weeks/month.
+    """
+    tiers = tier_config.get("tiers") or {}
+    global_period = cap_period(tier_config)
+    wpm = weeks_per_month(tier_config)
+    out: dict[str, float] = {}
+    for name, cfg in tiers.items():
+        raw = raw_tier_cap(cfg)
+        period = str(cfg.get("cap_period", global_period) or global_period).strip().lower()
+        out[str(name)] = raw if period == "monthly" else raw * wpm
+    if "Baseline" not in out:
+        out["Baseline"] = min(out.values()) if out else 400.0
+    return out
 
 
 def is_codex_access_tier(tier: object) -> bool:

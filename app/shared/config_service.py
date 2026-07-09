@@ -48,6 +48,14 @@ class AppConfig:
         self.user_tiers_path = config_dir / "user_tier_assignments.json"
         self.user_tier_history_path = config_dir / "user_tier_history.json"
         self.alert_rules_path = config_dir / "alert_rules.json"
+        # Analyst-written "stories"/notes pinned to specific users, and
+        # story-based alert rules (recency / burst / cross-tool) surfaced in the bell.
+        self.user_notes_path = config_dir / "user_notes.json"
+        self.story_rules_path = config_dir / "story_alert_rules.json"
+        # Dated log of tier changes (email -> [{date, tier, source}]), append-only,
+        # so "what tier were they on, as of what date" is answerable — distinct
+        # from user_tier_history.json (undated, overwritten per tierlist import).
+        self.tier_change_log_path = config_dir / "tier_change_log.json"
         # Which alert conditions the user has dismissed/read (the navbar bell
         # "inbox"). Persisted server-side so read-state survives across browsers
         # and machines, unlike the old per-browser localStorage approach.
@@ -180,6 +188,82 @@ class AppConfig:
         # Normalize whatever we're handed (AlertRule or dict) to clean dicts.
         serializable = [AlertRule.from_dict(r).to_dict() for r in rules]
         self.alert_rules_path.write_text(json.dumps(serializable, indent=2), encoding="utf-8")
+
+    # ── Analyst notes (mutable per-user "stories") ──────────────────────────
+    def load_user_notes(self) -> dict[str, list[dict]]:
+        """email(lowercased) -> list of note dicts {id, title, text, tone, created}."""
+        if not self.user_notes_path.exists():
+            return {}
+        try:
+            data = json.loads(self.user_notes_path.read_text(encoding="utf-8"))
+            return data if isinstance(data, dict) else {}
+        except Exception:
+            return {}
+
+    def save_user_notes(self, notes: dict) -> None:
+        self.config_dir.mkdir(parents=True, exist_ok=True)
+        self.user_notes_path.write_text(json.dumps(notes, indent=2), encoding="utf-8")
+
+    def add_user_note(self, email: str, note: dict) -> None:
+        key = str(email or "").strip().lower()
+        if not key:
+            return
+        notes = self.load_user_notes()
+        notes.setdefault(key, []).append(note)
+        self.save_user_notes(notes)
+
+    def delete_user_note(self, email: str, note_id: str) -> None:
+        key = str(email or "").strip().lower()
+        notes = self.load_user_notes()
+        if key in notes:
+            notes[key] = [n for n in notes[key] if str(n.get("id")) != str(note_id)]
+            if not notes[key]:
+                notes.pop(key)
+            self.save_user_notes(notes)
+
+    # ── Story alert rules (recency / burst / cross-tool, per user) ──────────
+    def load_story_alert_rules(self) -> list[dict]:
+        if not self.story_rules_path.exists():
+            return []
+        try:
+            data = json.loads(self.story_rules_path.read_text(encoding="utf-8"))
+            return data if isinstance(data, list) else []
+        except Exception:
+            return []
+
+    def save_story_alert_rules(self, rules: list) -> None:
+        self.config_dir.mkdir(parents=True, exist_ok=True)
+        self.story_rules_path.write_text(json.dumps(rules, indent=2), encoding="utf-8")
+
+    # ── Dated tier-change log ────────────────────────────────────────────────
+    def load_tier_change_log(self) -> dict[str, list[dict]]:
+        if not self.tier_change_log_path.exists():
+            return {}
+        try:
+            data = json.loads(self.tier_change_log_path.read_text(encoding="utf-8"))
+            return data if isinstance(data, dict) else {}
+        except Exception:
+            return {}
+
+    def save_tier_change_log(self, log: dict) -> None:
+        self.config_dir.mkdir(parents=True, exist_ok=True)
+        self.tier_change_log_path.write_text(json.dumps(log, indent=2), encoding="utf-8")
+
+    def record_tier_change(self, email: str, tier: str, source: str, on_date: str | None = None) -> None:
+        """Append a dated tier-change entry, skipping no-op repeats (same tier
+        as the last recorded entry for this user)."""
+        key = str(email or "").strip().lower()
+        tier = str(tier or "").strip()
+        if not key or not tier:
+            return
+        from datetime import date as _date
+        entry_date = on_date or _date.today().isoformat()
+        log = self.load_tier_change_log()
+        entries = log.setdefault(key, [])
+        if entries and entries[-1].get("tier") == tier:
+            return
+        entries.append({"date": entry_date, "tier": tier, "source": source})
+        self.save_tier_change_log(log)
 
     # ── Alert read-state (navbar bell "inbox") ──────────────────────────────
     def load_read_alerts(self) -> set[str]:

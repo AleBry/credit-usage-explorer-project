@@ -221,6 +221,12 @@ def create_settings_blueprint(services) -> Blueprint:
                 except (TypeError, ValueError):
                     wpm = 0.0
                 cfg["weeks_per_month"] = wpm or DEFAULT_WEEKS_PER_MONTH
+            # Date the workspace switched weekly -> monthly caps (display marker only).
+            change_date = str(request.form.get("cap_period_change_date", "")).strip()
+            if change_date:
+                cfg["cap_period_change_date"] = change_date
+            else:
+                cfg.pop("cap_period_change_date", None)
             config_svc.save_tiers(cfg)
             flash("Tier policy saved.", "success")
         except Exception as exc:
@@ -269,6 +275,10 @@ def create_settings_blueprint(services) -> Blueprint:
             histories = {} if replace_existing else config_svc.load_user_tier_history()
             histories.update(result.histories)
             config_svc.save_user_tier_history(histories)
+            # Dated record of "as of this submission, the user was on tier X" —
+            # distinct from the undated histories above (which get overwritten).
+            for imp_email, imp_tier in result.assignments.items():
+                config_svc.record_tier_change(imp_email, imp_tier, "import")
 
             tier_cfg = config_svc.load_tiers()
             tiers = tier_cfg.setdefault("tiers", {})

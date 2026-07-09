@@ -606,11 +606,18 @@
                 <label class="form-check-label small" for="weeks_per_month_mode">Use actual weeks in each month</label>
               </div>
             </div>
+            <div class="col-auto">
+              <label class="form-label small mb-1" for="cap_period_change_date">Weekly&rarr;monthly switch date</label>
+              <input class="form-control form-control-sm" style="width:11rem" type="date"
+                     id="cap_period_change_date" name="cap_period_change_date"
+                     value="{{ tiers.cap_period_change_date or '' }}">
+            </div>
             <div class="col">
               <p class="text-muted small mb-0">
                 Caps are entered in the selected period. Monthly caps are divided by weeks/month
                 to a weekly pace &mdash; all usage analysis stays weekly. &ldquo;Actual&rdquo; uses the
-                real number of weeks (4 or 5) in each calendar month.
+                real number of weeks (4 or 5) in each calendar month. The switch date is a marker
+                shown on user charts (it does not change the math).
               </p>
             </div>
           </div>

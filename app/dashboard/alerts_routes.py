@@ -5,6 +5,7 @@ advanced outlier search (analytics.user_cards_page?mode=advanced).
 """
 from __future__ import annotations
 
+import pandas as pd
 from flask import flash, jsonify, redirect, render_template, request, url_for
 
 from app.shared.alert_rules import AlertRule
@@ -58,13 +59,77 @@ def register_alerts_routes(bp, services) -> None:
             for a in evaluate_rules(df, alert_rules)
         }
 
+        # Story alert rules + their current trigger status
+        story_rules = config_svc.load_story_alert_rules()
+        story_hits: dict = {}
+        try:
+            from app.analytics.stories import STORY_ALERT_METRICS, evaluate_story_rules
+            from app.optimization.service import tier_monthly_caps
+
+            mcaps = tier_monthly_caps(config_svc.load_tiers())
+            default_cap = mcaps.get("Baseline", 400.0)
+            cap_by_email = {
+                str(e).strip().lower(): mcaps.get(str(t), default_cap)
+                for e, t in config_svc.load_user_tiers().items()
+            }
+            ref = pd.to_datetime(df["date_partition"], errors="coerce").max() \
+                if "date_partition" in df.columns else None
+            story_hits = {
+                a["id"].split("story:", 1)[-1]: a["detail"]
+                for a in evaluate_story_rules(df, story_rules, cap_by_email, default_cap, ref)
+            }
+        except Exception:
+            STORY_ALERT_METRICS = {}
+
         return render_template(
             "alerts.html",
             all_models_list=all_models_list,
             all_types_list=all_types_list,
             alert_rules=alert_rules,
             rule_hits=rule_hits,
+            story_rules=story_rules,
+            story_hits=story_hits,
+            story_metrics=STORY_ALERT_METRICS,
         )
+
+    @bp.route("/alerts/story-rules/add", methods=["POST"])
+    def add_story_rule() -> object:
+        import uuid
+        rules = config_svc.load_story_alert_rules()
+        metric = request.form.get("metric", "inactive")
+        if metric not in {"inactive", "burst_cap", "pro_codex"}:
+            metric = "inactive"
+        try:
+            days = max(int(float(request.form.get("days", 30) or 30)), 1)
+        except (ValueError, TypeError):
+            days = 30
+        rules.append({
+            "id": uuid.uuid4().hex[:8],
+            "name": request.form.get("name", "").strip() or "Story alert",
+            "metric": metric,
+            "email": request.form.get("email", "").strip(),
+            "days": days,
+            "enabled": True,
+        })
+        config_svc.save_story_alert_rules(rules)
+        flash("Story alert added.", "success")
+        return redirect(url_for("main.alerts_page"))
+
+    @bp.route("/alerts/story-rules/delete/<rule_id>", methods=["POST"])
+    def delete_story_rule(rule_id: str) -> object:
+        rules = [r for r in config_svc.load_story_alert_rules() if str(r.get("id")) != rule_id]
+        config_svc.save_story_alert_rules(rules)
+        flash("Story alert removed.", "success")
+        return redirect(url_for("main.alerts_page"))
+
+    @bp.route("/alerts/story-rules/toggle/<rule_id>", methods=["POST"])
+    def toggle_story_rule(rule_id: str) -> object:
+        rules = config_svc.load_story_alert_rules()
+        for r in rules:
+            if str(r.get("id")) == rule_id:
+                r["enabled"] = not r.get("enabled", True)
+        config_svc.save_story_alert_rules(rules)
+        return redirect(url_for("main.alerts_page"))
 
     @bp.route("/alerts/rules/add", methods=["POST"])
     def add_alert_rule() -> object:

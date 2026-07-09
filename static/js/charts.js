@@ -29,6 +29,38 @@ if (typeof Chart !== 'undefined') {
   });
 }
 
+// Vertical marker line at a given category label (e.g. the weekly->monthly cap
+// switch week). Set chart.$marker = { week: 'YYYY-MM-DD', label: '...' }.
+if (typeof Chart !== 'undefined') {
+  Chart.register({
+    id: 'bnl-week-marker',
+    afterDraw(chart) {
+      const m = chart.$marker;
+      if (!m || !m.week) return;
+      const labels = chart.data.labels || [];
+      let idx = labels.indexOf(m.week);
+      if (idx < 0) idx = labels.findIndex(w => String(w) >= m.week);
+      if (idx < 0) return;
+      const x = chart.scales.x.getPixelForValue(idx);
+      const { ctx, chartArea: { top, bottom } } = chart;
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(x, top);
+      ctx.lineTo(x, bottom);
+      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = 'rgba(214,51,132,.9)';
+      ctx.setLineDash([5, 3]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = 'rgba(214,51,132,.95)';
+      ctx.font = '10px sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillText(m.label || 'monthly caps', x + 4, top + 10);
+      ctx.restore();
+    },
+  });
+}
+
 // Shared categorical palette for multi-series charts.
 const BNL_PALETTE = [
   '#0d6efd', '#20c997', '#fd7e14', '#6f42c1', '#d63384',
@@ -84,6 +116,10 @@ function renderUsageTypeChart(canvasId, data, opts = {}) {
     },
   }, { exportName: opts.exportName || 'Credits by Usage Type per Week' });
   chart._stacked = stacked;
+  if (opts.markerWeek) {
+    chart.chart.$marker = { week: opts.markerWeek, label: opts.markerLabel || 'monthly caps' };
+    chart.chart.update();
+  }
   return chart;
 }
 

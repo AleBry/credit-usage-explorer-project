@@ -4,7 +4,7 @@ import json
 from urllib.parse import urlencode
 
 import pandas as pd
-from flask import Blueprint, current_app, render_template, request
+from flask import Blueprint, current_app, flash, redirect, render_template, request, url_for
 
 from app.dashboard.service import DEFAULT_RECORD_COLUMNS, build_record_view, record_column_meta
 from app.shared.chart_data import usage_type_weekly_json
@@ -298,6 +298,10 @@ def create_analytics_blueprint(services) -> Blueprint:
             df = d.filter_by_date(df, start_date, end_date, col=date_field)
         df = d.filter_by_credits(df, min_credits, max_credits, zero_credits)
 
+        # Records scoped to this user only (before usage-type/model filters), so
+        # the narrative "stories" see the full picture across tools.
+        user_scope_df = df.copy()
+
         user_types = (
             sorted(df["usage_type_parsed_type"].dropna().unique().tolist())
             if "usage_type_parsed_type" in df.columns else []
@@ -465,6 +469,60 @@ def create_analytics_blueprint(services) -> Blueprint:
             has_codex_access = False
         optimization_page_available = "optimization.optimization_page" in current_app.view_functions
 
+        # Narrative "stories" for this user (month-to-date pace, cross-tool usage).
+        user_stories: list[dict] = []
+        user_month_history: list[dict] = []
+        user_triggered_alerts: list[dict] = []
+        cap_change_date = ""
+        try:
+            from app.analytics.stories import build_month_pace_history, build_user_stories, evaluate_story_rules
+            from app.shared.alerts import evaluate_rules
+
+            tcfg = config_svc.load_tiers()
+            cap_change_date = str(tcfg.get("cap_period_change_date", "") or "")
+            user_tier = "Baseline"
+            if optimization_user:
+                user_tier = str(optimization_user.get("latest_governance_tier") or "Baseline")
+            # Reference "now" for recency = the most recent date across all data.
+            reference_date = None
+            if "date_partition" in d.df.columns:
+                reference_date = pd.to_datetime(d.df["date_partition"], errors="coerce").max()
+            user_stories = build_user_stories(
+                user_scope_df, tcfg, user_tier, reference_date=reference_date
+            )
+            user_month_history = build_month_pace_history(user_scope_df, tcfg, user_tier)
+
+            # This user's currently-triggering alerts (custom rules + story rules),
+            # evaluated against just their own activity, so the conditions shown
+            # are actually about them (not an org-wide rule that happens to fire).
+            if email:
+                key = email.strip().lower()
+                from app.optimization.service import tier_monthly_caps
+
+                mcaps = tier_monthly_caps(tcfg)
+                monthly_cap = mcaps.get(user_tier, mcaps.get("Baseline", 400.0))
+                user_triggered_alerts += evaluate_rules(user_scope_df, config_svc.load_alert_rules())
+                story_rules_for_user = [
+                    r for r in config_svc.load_story_alert_rules()
+                    if not str(r.get("email", "")).strip()
+                    or str(r.get("email", "")).strip().lower() == key
+                ]
+                user_triggered_alerts += evaluate_story_rules(
+                    user_scope_df, story_rules_for_user, {key: monthly_cap}, monthly_cap, reference_date,
+                )
+        except Exception:
+            user_stories = []
+            user_month_history = []
+            user_triggered_alerts = []
+
+        user_tier_changes = []
+        try:
+            user_tier_changes = list(reversed(
+                config_svc.load_tier_change_log().get((email or "").strip().lower(), [])
+            ))
+        except Exception:
+            user_tier_changes = []
+
         return render_template(
             "user_summary.html",
             name=name,
@@ -512,7 +570,45 @@ def create_analytics_blueprint(services) -> Blueprint:
             optimization_page_available=optimization_page_available,
             tier_editing_locked=config_svc.is_tier_editing_locked(),
             has_codex_access=has_codex_access,
+            user_stories=user_stories,
+            user_month_history=user_month_history,
+            user_triggered_alerts=user_triggered_alerts,
+            user_tier_changes=user_tier_changes,
+            cap_change_date=cap_change_date,
+            user_notes=config_svc.load_user_notes().get((email or "").strip().lower(), []),
         )
+
+    @bp.route("/user-summary/note", methods=["POST"])
+    def add_user_note() -> object:
+        import uuid
+        from datetime import date
+        email = request.form.get("email", "").strip()
+        title = request.form.get("title", "").strip()
+        text = request.form.get("text", "").strip()
+        tone = request.form.get("tone", "info").strip().lower()
+        if tone not in {"info", "notable", "alert"}:
+            tone = "info"
+        if not email:
+            flash("A user email is required to pin a note.", "danger")
+        elif not (title or text):
+            flash("Add a title or note text.", "danger")
+        else:
+            config_svc.add_user_note(email, {
+                "id": uuid.uuid4().hex[:8],
+                "title": title or "Note",
+                "text": text,
+                "tone": tone,
+                "created": date.today().isoformat(),
+            })
+            flash("Note pinned.", "success")
+        return redirect(url_for("analytics.user_summary", email=email))
+
+    @bp.route("/user-summary/note/delete", methods=["POST"])
+    def delete_user_note() -> object:
+        email = request.form.get("email", "").strip()
+        config_svc.delete_user_note(email, request.form.get("note_id", ""))
+        flash("Note removed.", "success")
+        return redirect(url_for("analytics.user_summary", email=email))
 
     @bp.route("/user-cards", methods=["GET"])
     def user_cards_page() -> str:

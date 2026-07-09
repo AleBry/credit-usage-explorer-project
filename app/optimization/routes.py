@@ -230,9 +230,11 @@ def create_optimization_blueprint(services) -> Blueprint:
 
         if tier:
             assignments[email] = tier
+            config_svc.record_tier_change(email, tier, "manual")
             flash(f"Tier updated for {email}.", "success")
         else:
             assignments.pop(email, None)
+            config_svc.record_tier_change(email, "Baseline", "manual-reset")
             flash(f"Tier reset to Baseline default for {email}.", "success")
         config_svc.save_user_tiers(assignments)
         return redirect(next_url)
@@ -259,10 +261,12 @@ def create_optimization_blueprint(services) -> Blueprint:
         if tierlist_tier and tierlist_tier in tiers:
             assignments[email] = tierlist_tier
             config_svc.save_user_tiers(assignments)
+            config_svc.record_tier_change(email, tierlist_tier, "reset-to-tierlist")
             flash(f"Tier for {email} reset to tierlist value: {tierlist_tier}.", "success")
         elif tierlist_tier:
             assignments.pop(email, None)
             config_svc.save_user_tiers(assignments)
+            config_svc.record_tier_change(email, "Baseline", "reset-to-tierlist")
             flash(
                 f"Tierlist tier '{tierlist_tier}' for {email} is not in the current "
                 f"policy; reset to Baseline default.",
@@ -271,6 +275,7 @@ def create_optimization_blueprint(services) -> Blueprint:
         else:
             assignments.pop(email, None)
             config_svc.save_user_tiers(assignments)
+            config_svc.record_tier_change(email, "Baseline", "reset-to-tierlist")
             flash(f"No tierlist entry for {email}; reset to Baseline default.", "success")
         return redirect(next_url)
 
@@ -281,12 +286,16 @@ def create_optimization_blueprint(services) -> Blueprint:
         next_url = _safe_next("settings.settings_page")
         tiers = tier_caps(config_svc.load_tiers())
         histories = config_svc.load_user_tier_history()
+        previous = config_svc.load_user_tiers()
         rebuilt = {
             email: hist[-1]
             for email, hist in histories.items()
             if hist and hist[-1] in tiers
         }
         config_svc.save_user_tiers(rebuilt)
+        for email, tier in rebuilt.items():
+            if previous.get(email) != tier:
+                config_svc.record_tier_change(email, tier, "reset-all-to-tierlist")
         flash(
             f"Reset all tier assignments to the tierlist: {len(rebuilt):,} user(s) "
             f"restored, manual overrides discarded.",

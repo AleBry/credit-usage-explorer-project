@@ -20,13 +20,12 @@
 
           <!-- Left: identity + compact stats -->
           <div class="col-xl-4 col-lg-5">
-            <div class="user-name-hero">{{ name or email or 'User' }}</div>
-
-            {% if has_codex_access %}
-            <div class="mb-1">
+            <div class="d-flex align-items-center flex-wrap gap-2">
+              <div class="user-name-hero mb-0">{{ name or email or 'User' }}</div>
+              {% if has_codex_access %}
               <span class="badge bg-info text-dark" title="This user belongs to a Codex group. Codex is treated as product access, not a credit tier.">&#129302; Codex access</span>
+              {% endif %}
             </div>
-            {% endif %}
 
             {% if email and email != name %}
             <div class="user-detail"><span class="label">Email:</span> {{ email }}</div>
@@ -86,6 +85,31 @@
                 </button>
               </div>
             </div>
+
+            {% if user_stories or user_notes or user_triggered_alerts %}
+            <div class="stat-card optimization-action-card mt-2">
+              <div class="d-flex justify-content-between align-items-center gap-2">
+                <div class="min-w-0">
+                  <div class="stat-label mb-1">Stories</div>
+                  <div class="stat-value">
+                    {{ user_stories|length }} insight{{ '' if user_stories|length == 1 else 's' }}
+                    {%- if user_triggered_alerts %}, {{ user_triggered_alerts|length }} alert{{ '' if user_triggered_alerts|length == 1 else 's' }}{% endif -%}
+                  </div>
+                  <div class="text-muted small">{{ user_notes|length }} pinned note{{ '' if user_notes|length == 1 else 's' }}</div>
+                </div>
+                <button class="btn btn-outline-primary btn-sm py-0 px-1 flex-shrink-0" type="button"
+                        title="View stories" aria-label="View stories"
+                        onclick="document.getElementById('stories-tab').click()">
+                  <svg width="13" height="13" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true">
+                    <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/>
+                    <path d="M8 13A5 5 0 1 1 8 3a5 5 0 0 1 0 10zm0 1A6 6 0 1 0 8 2a6 6 0 0 0 0 12z"/>
+                    <path d="M8 11a3 3 0 1 1 0-6 3 3 0 0 1 0 6zm0 1A4 4 0 1 0 8 4a4 4 0 0 0 0 8z"/>
+                    <path d="M9.5 8a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0z"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+            {% endif %}
           </div>
 
           <!-- Right: charts -->
@@ -122,10 +146,11 @@
         </div>
       </div>
 
+
       <!-- TABS -->
       <ul class="nav nav-tabs" role="tablist">
         <li class="nav-item" role="presentation">
-          <button class="nav-link {% if active_tab not in ['records', 'optimization'] %}active{% endif %}" data-bs-toggle="tab" data-bs-target="#overview" type="button" role="tab">
+          <button class="nav-link {% if active_tab not in ['records', 'optimization', 'stories'] %}active{% endif %}" data-bs-toggle="tab" data-bs-target="#overview" type="button" role="tab">
             Overview
           </button>
         </li>
@@ -141,12 +166,19 @@
             Records
           </button>
         </li>
+
+        <li class="nav-item" role="presentation">
+          <button class="nav-link {% if active_tab == 'stories' %}active{% endif %}" id="stories-tab" data-bs-toggle="tab" data-bs-target="#stories" type="button" role="tab">
+            Stories
+            {% if user_stories or user_notes %}<span class="badge bg-secondary ms-1">{{ (user_stories|length) + (user_notes|length) }}</span>{% endif %}
+          </button>
+        </li>
       </ul>
 
       <div class="tab-content">
 
         <!-- OVERVIEW TAB -->
-        <div class="tab-pane fade {% if active_tab not in ['records', 'optimization'] %}show active{% endif %}" id="overview" role="tabpanel">
+        <div class="tab-pane fade {% if active_tab not in ['records', 'optimization', 'stories'] %}show active{% endif %}" id="overview" role="tabpanel">
           <div class="section-card user-summary-filter-card">
             <h5>Filters</h5>
 
@@ -473,6 +505,177 @@
           </div>
         </div>
 
+        <!-- STORIES TAB -->
+        <div class="tab-pane fade {% if active_tab == 'stories' %}show active{% endif %}" id="stories" role="tabpanel">
+
+          {% if user_triggered_alerts %}
+          <div class="section-card mb-3">
+            <h5>Triggered Alerts</h5>
+            <p class="text-muted small mb-2">Alert conditions (custom rules + story alerts) currently true for this user, evaluated against just their own activity.</p>
+            <ul class="list-group list-group-flush">
+              {% for a in user_triggered_alerts %}
+              {% set lvl = {'danger':'danger','warning':'warning','info':'secondary'}.get(a.level, 'secondary') %}
+              <li class="list-group-item px-0">
+                <span class="badge bg-{{ lvl }} me-2">{{ a.level }}</span>
+                <strong>{{ a.title }}</strong>
+                <div class="text-muted small">{{ a.detail }}</div>
+              </li>
+              {% endfor %}
+            </ul>
+          </div>
+          {% endif %}
+
+          <div class="section-card mb-3">
+            <div class="d-flex align-items-center gap-2 mb-2 flex-wrap">
+              <h5 class="mb-0">Pinned Notes</h5>
+              {% if email %}
+              <button class="btn btn-outline-secondary btn-sm ms-auto" type="button"
+                      data-bs-toggle="collapse" data-bs-target="#add-note-form">&plus; Pin note</button>
+              {% else %}
+              <span class="text-muted small ms-auto">Search by email to pin notes</span>
+              {% endif %}
+            </div>
+            {% if email %}
+            <div class="collapse mb-3" id="add-note-form">
+              <form method="post" action="{{ url_for('analytics.add_user_note') }}" class="row g-2 align-items-end">
+                <input type="hidden" name="email" value="{{ email }}">
+                <div class="col-md-3"><input class="form-control form-control-sm" name="title" placeholder="Title (e.g. Approved heavy use)"></div>
+                <div class="col-md-5"><input class="form-control form-control-sm" name="text" placeholder="Note…"></div>
+                <div class="col-md-2">
+                  <select class="form-select form-select-sm" name="tone">
+                    <option value="info">Info</option>
+                    <option value="notable">Notable</option>
+                    <option value="alert">Alert</option>
+                  </select>
+                </div>
+                <div class="col-md-2"><button class="btn btn-primary btn-sm w-100" type="submit">Pin note</button></div>
+              </form>
+            </div>
+            {% endif %}
+            <div class="row g-3">
+              {% for n in user_notes %}
+              {% set ntone = {'alert': 'danger', 'notable': 'primary', 'info': 'secondary'}.get(n.tone, 'secondary') %}
+              <div class="col-md-6">
+                <div class="story-card h-100 p-3 rounded bg-body-tertiary border-start border-4 border-{{ ntone }}">
+                  <div class="d-flex justify-content-between align-items-start gap-2">
+                    <div class="min-w-0">
+                      <div class="d-flex align-items-center gap-2 mb-1">
+                        <span>📌</span>
+                        <span class="fw-semibold">{{ n.title }}</span>
+                      </div>
+                      {% if n.text %}<div class="mb-1">{{ n.text }}</div>{% endif %}
+                      <div class="text-muted small">Pinned {{ n.created }}</div>
+                    </div>
+                    <form method="post" action="{{ url_for('analytics.delete_user_note') }}" onsubmit="return confirm('Remove this note?');">
+                      <input type="hidden" name="email" value="{{ email }}">
+                      <input type="hidden" name="note_id" value="{{ n.id }}">
+                      <button class="btn btn-sm btn-outline-danger" title="Remove note">&times;</button>
+                    </form>
+                  </div>
+                </div>
+              </div>
+              {% endfor %}
+              {% if not user_notes %}<div class="text-muted small">No notes pinned yet.</div>{% endif %}
+            </div>
+          </div>
+
+          <div class="section-card mb-3">
+            <h5>Insights</h5>
+            <div class="row g-3">
+              {% for s in user_stories %}
+              {% set tone = {'alert': 'danger', 'notable': 'primary', 'info': 'secondary'}.get(s.tone, 'secondary') %}
+              <div class="col-md-6">
+                <div class="story-card h-100 p-3 rounded bg-body-tertiary border-start border-4 border-{{ tone }}">
+                  <div class="d-flex justify-content-between align-items-start gap-2">
+                    <div class="min-w-0">
+                      <div class="d-flex align-items-center gap-2 mb-1">
+                        <span style="font-size:1.1rem;">{{ s.icon }}</span>
+                        <span class="fw-semibold">{{ s.title }}</span>
+                      </div>
+                      <div class="mb-1">{{ s.headline }}</div>
+                      {% if s.detail %}<div class="text-muted small">{{ s.detail }}</div>{% endif %}
+                    </div>
+                    {% if s.metric %}<span class="badge bg-{{ tone }} fs-6 flex-shrink-0">{{ s.metric }}</span>{% endif %}
+                  </div>
+                  {% if s.dates %}
+                  <button class="btn btn-link btn-sm p-0 mt-2 text-decoration-none" type="button"
+                          data-bs-toggle="collapse" data-bs-target="#big-story-{{ loop.index }}-dates" aria-expanded="false">
+                    View {{ s.dates|length }} date{{ '' if s.dates|length == 1 else 's' }} &raquo;
+                  </button>
+                  <div class="collapse mt-1" id="big-story-{{ loop.index }}-dates">
+                    <ul class="list-unstyled small mb-0">
+                      {% for d in s.dates %}
+                      <li class="d-flex justify-content-between gap-3 border-bottom py-1">
+                        <span class="fw-semibold">{{ d.date }}</span>
+                        <span class="text-muted text-end">{{ d.note }}</span>
+                      </li>
+                      {% endfor %}
+                    </ul>
+                  </div>
+                  {% endif %}
+                </div>
+              </div>
+              {% endfor %}
+              {% if not user_stories %}<div class="text-muted small">No stories yet for this user.</div>{% endif %}
+            </div>
+          </div>
+
+          {% if user_month_history %}
+          <div class="section-card mb-3">
+            <h5>Monthly Pace History</h5>
+            <p class="text-muted small mb-2">Every month of activity, scored against that month's regime (weekly caps before the switch date, monthly after).</p>
+            <div class="table-responsive">
+              <table class="table table-sm records-table mb-0">
+                <thead>
+                  <tr>
+                    <th>Month</th>
+                    <th class="text-end">Spend</th>
+                    <th class="text-end">Budget</th>
+                    <th class="text-end">%</th>
+                    <th>Regime</th>
+                    <th>Hit budget</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for m in user_month_history %}
+                  <tr class="{% if m.tone == 'alert' %}table-danger{% elif m.tone == 'notable' %}table-warning{% endif %}">
+                    <td>{{ m.month_label }}{% if m.is_latest %} <span class="field-badge">Latest</span>{% endif %}</td>
+                    <td class="text-end">{{ "{:,.0f}".format(m.spend) }}</td>
+                    <td class="text-end">{{ "{:,.0f}".format(m.allowance) }}</td>
+                    <td class="text-end">{{ m.pct_label }}</td>
+                    <td>{{ 'Weekly caps' if m.weekly_regime else 'Monthly cap' }}</td>
+                    <td>{{ ('Day ' ~ m.day_hit_cap) if m.day_hit_cap else '—' }}</td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          {% endif %}
+
+          {% if user_tier_changes %}
+          <div class="section-card">
+            <h5>Tier Changes</h5>
+            <p class="text-muted small mb-2">Dated log of this user's recorded tier, oldest change reasons first.</p>
+            <div class="table-responsive">
+              <table class="table table-sm records-table mb-0">
+                <thead><tr><th>Date</th><th>Tier</th><th>Source</th></tr></thead>
+                <tbody>
+                  {% for t in user_tier_changes %}
+                  <tr>
+                    <td>{{ t.date }}</td>
+                    <td>{{ t.tier }}</td>
+                    <td class="text-muted small">{{ t.source }}</td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          {% endif %}
+
+        </div>
+
         <!-- RECORDS TAB -->
         <div class="tab-pane fade {% if active_tab == 'records' %}show active{% endif %}" id="records" role="tabpanel">
           <div class="section-card user-summary-filter-card">
@@ -638,8 +841,20 @@
           canvas.style.display = 'none';
           return;
         }
+        // Optional weekly->monthly cap switch marker (Monday of the switch week).
+        const changeDate = "{{ cap_change_date }}";
+        let markerWeek = null;
+        if (changeDate) {
+          const dt = new Date(changeDate + 'T00:00:00');
+          if (!isNaN(dt)) {
+            const dow = (dt.getDay() + 6) % 7;  // Mon=0
+            dt.setDate(dt.getDate() - dow);
+            markerWeek = dt.toISOString().slice(0, 10);
+          }
+        }
         window.userWeeklyBNL = renderUsageTypeChart('userWeeklyChart', data,
-          { exportName: 'User Credits by Type per Week' });
+          { exportName: 'User Credits by Type per Week',
+            markerWeek: markerWeek, markerLabel: '→ monthly caps' });
       })();
 
       // Credits by usage type donut
