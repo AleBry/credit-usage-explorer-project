@@ -39,6 +39,16 @@ def create_dashboard_blueprint(services) -> Blueprint:
     def data() -> CreditUsageData:
         return store.data
 
+    def _governance_tier_map() -> dict[str, str]:
+        """email(lowercased) -> resolved governance tier, same resolution
+        Optimization uses (Codex resolved out, unless it's a user's only tier)."""
+        from app.optimization.service import resolve_governance_assignments, tier_caps
+
+        tier_cfg = config_svc.load_tiers()
+        raw_assignments = config_svc.load_user_tiers()
+        tier_histories = config_svc.load_user_tier_history()
+        return resolve_governance_assignments(raw_assignments, tier_histories, tier_caps(tier_cfg))
+
     def _records_query_state(d: CreditUsageData):
         search_field = request.args.get("search_field", "any")
         search_query = request.args.get("search_query", "").strip()
@@ -49,6 +59,7 @@ def create_dashboard_blueprint(services) -> Blueprint:
         zero_credits = request.args.get("zero_credits", "")
         usage_type = request.args.get("usage_type", "").strip()
         model = request.args.get("model", "").strip()
+        tier = request.args.get("tier", "").strip()
         lookback_days = request.args.get("lookback_days", "").strip()
         sort_by = request.args.get("sort_by", "").strip()
         sort_order = request.args.get("sort_order", "asc").strip()
@@ -64,21 +75,29 @@ def create_dashboard_blueprint(services) -> Blueprint:
                 start_date = str((dts.max() - pd.Timedelta(days=days - 1)).date())
                 end_date = str(dts.max().date())
 
-        selected_param = [c for c in request.args.getlist("selected_fields") if c in d.columns]
+        # "tier" is a synthetic, config-derived column (not part of the raw
+        # data), so it's valid as a display/search field alongside d.columns.
+        available_columns = list(d.columns) + ["tier"]
+        selected_param = [c for c in request.args.getlist("selected_fields") if c in available_columns]
         selected_fields = (
-            [c for c in d.columns if c in selected_param] if selected_param
+            [c for c in available_columns if c in selected_param] if selected_param
             else [c for c in DEFAULT_RECORD_COLUMNS if c in d.columns]
         )
 
         df = d.df.copy()
         df = d.filter_by_date(df, start_date, end_date)
         df = d.filter_by_credits(df, min_credits, max_credits, zero_credits)
+        if "email" in df.columns:
+            governance = _governance_tier_map()
+            df["tier"] = df["email"].astype(str).str.strip().str.lower().map(governance).fillna("Baseline")
         # Usage-type filter runs on the corrected parsed type, so "codex" also
         # catches API rows that arrive labeled as chat.
         if usage_type and "usage_type_parsed_type" in df.columns:
             df = df[df["usage_type_parsed_type"] == usage_type]
         if model and "usage_type_model" in df.columns:
             df = df[df["usage_type_model"] == model]
+        if tier and "tier" in df.columns:
+            df = df[df["tier"] == tier]
 
         if search_query:
             if search_field == "any":
@@ -119,6 +138,7 @@ def create_dashboard_blueprint(services) -> Blueprint:
             "zero_credits": zero_credits,
             "usage_type": usage_type,
             "model": model,
+            "tier": tier,
             "sort_by": sort_by,
             "sort_order": sort_order,
         }
@@ -221,14 +241,23 @@ def create_dashboard_blueprint(services) -> Blueprint:
                 if col in d.df.columns else []
             )
 
+        # Tier options reflect every tier actually in use across the whole
+        # dataset (not just the currently filtered rows), same as usage
+        # type/model above.
+        tier_options: list[str] = []
+        if "email" in d.df.columns:
+            governance = _governance_tier_map()
+            all_tiers = d.df["email"].astype(str).str.strip().str.lower().map(governance).fillna("Baseline")
+            tier_options = sorted(all_tiers.unique().tolist())
+
         return render_template(
             "index.html",
-            toggle_columns=[record_column_meta(c) for c in d.columns],
+            toggle_columns=[record_column_meta(c) for c in d.columns] + [record_column_meta("tier")],
             columns=columns,
             rows=rows,
             row_count=len(df),
             selected_fields=set(selected_fields),
-            headers=d.columns,
+            headers=list(d.columns) + ["tier"],
             search_field=state["search_field"],
             search_query=state["search_query"],
             start_date=state["start_date"],
@@ -238,11 +267,13 @@ def create_dashboard_blueprint(services) -> Blueprint:
             zero_credits=state["zero_credits"],
             usage_type=state["usage_type"],
             model=state["model"],
+            tier=state["tier"],
             sort_by=state["sort_by"],
             sort_order=state["sort_order"],
             export_url=_query_url("main.records_export_csv"),
             usage_type_options=_options("usage_type_parsed_type"),
             model_options=_options("usage_type_model"),
+            tier_options=tier_options,
         )
 
     @bp.route("/records/export.csv", methods=["GET"])

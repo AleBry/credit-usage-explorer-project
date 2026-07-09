@@ -30,6 +30,7 @@ _RECORD_COLUMN_META: dict[str, tuple[str, str, bool]] = {
     "account_id":             ("Account ID", "left", True),
     "account_user_id":        ("Account User ID", "left", True),
     "public_id":              ("Public ID", "left", True),
+    "tier":                   ("Tier", "left", True),
 }
 
 # Curated, clean default view — parsed/corrected fields over the raw ones, so

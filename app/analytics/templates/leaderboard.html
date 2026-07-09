@@ -61,6 +61,17 @@
               <a class="btn btn-outline-secondary btn-sm w-100 d-block" href="{{ url_for('analytics.leaderboard_page') }}">Clear</a>
             </div>
           </div>
+          <div class="row g-2 align-items-end mt-1">
+            <div class="col-md-3">
+              <label class="form-label">Tier</label>
+              <select class="form-select form-select-sm" name="tier_filter">
+                <option value="" {% if not tier_filter %}selected{% endif %}>All tiers</option>
+                {% for t in all_tiers %}
+                <option value="{{ t }}" {% if tier_filter == t %}selected{% endif %}>{{ t }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
         </div>
       </form>
 

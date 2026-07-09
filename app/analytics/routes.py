@@ -30,9 +30,29 @@ def create_analytics_blueprint(services) -> Blueprint:
             return default
         return max(min_value, min(value, max_result_limit))
 
+    def _governance_tier_map() -> dict[str, str]:
+        """email(lowercased) -> resolved governance tier, same resolution
+        Optimization uses (Codex resolved out, unless it's a user's only tier)."""
+        from app.optimization.service import resolve_governance_assignments, tier_caps
+
+        tier_cfg = config_svc.load_tiers()
+        raw_assignments = config_svc.load_user_tiers()
+        tier_histories = config_svc.load_user_tier_history()
+        return resolve_governance_assignments(raw_assignments, tier_histories, tier_caps(tier_cfg))
+
+    def _tier_column(df: pd.DataFrame) -> pd.Series:
+        governance = _governance_tier_map()
+        return df["email"].astype(str).str.strip().str.lower().map(governance).fillna("Baseline")
+
+    def _tier_options(d: CreditUsageData) -> list[str]:
+        if "email" not in d.df.columns:
+            return []
+        return sorted(_tier_column(d.df).unique().tolist())
+
     def _leaderboard_filtered_df(d: CreditUsageData) -> pd.DataFrame:
         usage_type_filter = request.args.get("usage_type_filter", "")
         model_filter = request.args.get("model_filter", "")
+        tier_filter = request.args.get("tier_filter", "").strip()
         start_date = request.args.get("start_date", "")
         end_date = request.args.get("end_date", "")
         min_credits = request.args.get("min_credits", "").strip()
@@ -46,12 +66,15 @@ def create_analytics_blueprint(services) -> Blueprint:
             df = df[df["usage_type_parsed_type"] == usage_type_filter]
         if model_filter and "usage_type_model" in df.columns:
             df = df[df["usage_type_model"] == model_filter]
+        if tier_filter and "email" in df.columns:
+            df = df[_tier_column(df) == tier_filter]
 
         return d.filter_by_credits(df, min_credits, max_credits, zero_credits)
 
     def _basic_user_rows(d: CreditUsageData) -> list[dict]:
         name_query = request.args.get("name_query", "").strip()
         email_query = request.args.get("email_query", "").strip()
+        tier_query = request.args.get("tier_query", "").strip()
         date_field = request.args.get("date_field", "date_partition")
         start_date = request.args.get("start_date", "")
         end_date = request.args.get("end_date", "")
@@ -65,6 +88,8 @@ def create_analytics_blueprint(services) -> Blueprint:
             df = df[df["name"].astype(str).str.contains(name_query, case=False, na=False, regex=False)]
         if email_query and "email" in df.columns:
             df = df[df["email"].astype(str).str.contains(email_query, case=False, na=False, regex=False)]
+        if tier_query and "email" in df.columns:
+            df = df[_tier_column(df) == tier_query]
         if date_field and (start_date or end_date):
             df = d.filter_by_date(df, start_date, end_date, col=date_field)
         df = d.filter_by_credits(df, min_credits, max_credits, zero_credits)
@@ -101,6 +126,7 @@ def create_analytics_blueprint(services) -> Blueprint:
         active_tab = request.args.get("active_tab", "users")
         usage_type_filter = request.args.get("usage_type_filter", "")
         model_filter = request.args.get("model_filter", "")
+        tier_filter = request.args.get("tier_filter", "").strip()
         start_date = request.args.get("start_date", "")
         end_date = request.args.get("end_date", "")
         top_n = result_limit("top_n", 25, 5)
@@ -118,6 +144,7 @@ def create_analytics_blueprint(services) -> Blueprint:
             sorted(d.df["usage_type_model"].dropna().unique().tolist())
             if "usage_type_model" in d.df.columns else []
         )
+        all_tiers = _tier_options(d)
 
         lb = Leaderboards(df, top_n)
         lb_users = lb.by_user()
@@ -133,6 +160,7 @@ def create_analytics_blueprint(services) -> Blueprint:
         base_params = {k: v for k, v in {
             "usage_type_filter": usage_type_filter,
             "model_filter": model_filter,
+            "tier_filter": tier_filter,
             "start_date": start_date,
             "end_date": end_date,
             "top_n": top_n if top_n != 25 else "",
@@ -146,12 +174,14 @@ def create_analytics_blueprint(services) -> Blueprint:
             active_tab=active_tab,
             usage_type_filter=usage_type_filter,
             model_filter=model_filter,
+            tier_filter=tier_filter,
             start_date=start_date,
             end_date=end_date,
             top_n=top_n,
             max_result_limit=max_result_limit,
             all_usage_types=all_usage_types,
             all_models=all_models,
+            all_tiers=all_tiers,
             lb_users=lb_users,
             lb_users_by_type=lb_users_by_type,
             lb_models=lb_models,
@@ -644,6 +674,7 @@ def create_analytics_blueprint(services) -> Blueprint:
             view = "cards"
         name_query = request.args.get("name_query", "").strip()
         email_query = request.args.get("email_query", "").strip()
+        tier_query = request.args.get("tier_query", "").strip()
         # Default to the canonical usage date so a plain date-range search works
         # without forcing the user to choose a field first.
         date_field = request.args.get("date_field", "date_partition")
@@ -654,12 +685,14 @@ def create_analytics_blueprint(services) -> Blueprint:
         max_credits = request.args.get("max_credits", "").strip()
         zero_credits = request.args.get("zero_credits", "")
 
-        # The name/email search applies in both modes.
+        # The name/email/tier search applies in both modes.
         df = d.df.copy()
         if name_query and "name" in df.columns:
             df = df[df["name"].astype(str).str.contains(name_query, case=False, na=False, regex=False)]
         if email_query and "email" in df.columns:
             df = df[df["email"].astype(str).str.contains(email_query, case=False, na=False, regex=False)]
+        if tier_query and "email" in df.columns:
+            df = df[_tier_column(df) == tier_query]
 
         # Advanced (outlier) controls + result.
         metric = request.args.get("metric", "per_user_window").strip()
@@ -678,6 +711,7 @@ def create_analytics_blueprint(services) -> Blueprint:
             sorted(d.df["usage_type_model"].dropna().unique().tolist())
             if "usage_type_model" in d.df.columns else []
         )
+        all_tiers_list = _tier_options(d)
 
         user_list: list[dict] = []
         outlier_rows: list[dict] = []
@@ -701,6 +735,7 @@ def create_analytics_blueprint(services) -> Blueprint:
             "mode": "basic",
             "name_query": name_query,
             "email_query": email_query,
+            "tier_query": tier_query,
             "date_field": date_field,
             "start_date": start_date,
             "end_date": end_date,
@@ -718,6 +753,8 @@ def create_analytics_blueprint(services) -> Blueprint:
             base_query=urlencode(base_params),
             name_query=name_query,
             email_query=email_query,
+            tier_query=tier_query,
+            all_tiers_list=all_tiers_list,
             date_field=date_field,
             start_date=start_date,
             end_date=end_date,
@@ -773,6 +810,7 @@ def create_analytics_blueprint(services) -> Blueprint:
             return csv_response(export_df, "users.csv", filters=[
                 ("name", request.args.get("name_query", "").strip()),
                 ("email", request.args.get("email_query", "").strip()),
+                ("tier", request.args.get("tier_query", "").strip()),
                 ("dates", date_range),
                 ("credits", credit_range),
                 ("zero", "only" if request.args.get("zero_credits") == "1" else ""),
@@ -781,6 +819,7 @@ def create_analytics_blueprint(services) -> Blueprint:
 
         name_query = request.args.get("name_query", "").strip()
         email_query = request.args.get("email_query", "").strip()
+        tier_query = request.args.get("tier_query", "").strip()
         metric = request.args.get("metric", "per_user_window").strip()
         if metric not in OUTLIER_VIEWS:
             metric = "per_user_window"
@@ -797,6 +836,8 @@ def create_analytics_blueprint(services) -> Blueprint:
             df = df[df["name"].astype(str).str.contains(name_query, case=False, na=False, regex=False)]
         if email_query and "email" in df.columns:
             df = df[df["email"].astype(str).str.contains(email_query, case=False, na=False, regex=False)]
+        if tier_query and "email" in df.columns:
+            df = df[_tier_column(df) == tier_query]
 
         rows, count, win_start, win_end, columns = compute_outliers(
             df, metric, credit_threshold, lookback_days,
@@ -817,6 +858,7 @@ def create_analytics_blueprint(services) -> Blueprint:
         return csv_response(export_df, fname, filters=[
             ("name", name_query),
             ("email", email_query),
+            ("tier", tier_query),
             ("type", adv_usage_type),
             ("model", adv_model),
             ("over", threshold),

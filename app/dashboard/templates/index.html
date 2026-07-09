@@ -74,6 +74,15 @@
                 {% endfor %}
               </select>
             </div>
+            <div class="col-md-3">
+              <label class="form-label">Tier</label>
+              <select class="form-select form-select-sm" name="tier">
+                <option value="">All tiers</option>
+                {% for t in tier_options %}
+                <option value="{{ t }}" {% if tier == t %}selected{% endif %}>{{ t }}</option>
+                {% endfor %}
+              </select>
+            </div>
           </div>
 
           <!-- Row 3: credits filter -->
@@ -172,6 +181,9 @@
             {% if model %}
             <span class="field-badge ms-2">{{ model }}</span>
             {% endif %}
+            {% if tier %}
+            <span class="field-badge ms-2">{{ tier }}</span>
+            {% endif %}
             {% if min_credits or max_credits %}
             <span class="field-badge ms-2">credits: {{ min_credits or '0' }}–{{ max_credits or '∞' }}</span>
             {% endif %}
@@ -236,7 +248,7 @@
     <script src="{{ url_for('static', filename='js/column_grid.js') }}"></script>
     <script src="{{ url_for('static', filename='js/table_sort.js') }}"></script>
     <script>
-      document.querySelectorAll('input[type="date"], select[name="search_field"], select[name="usage_type"], select[name="model"]').forEach(el => {
+      document.querySelectorAll('input[type="date"], select[name="search_field"], select[name="usage_type"], select[name="model"], select[name="tier"]').forEach(el => {
         el.addEventListener('change', () => el.closest('form').submit());
       });
 

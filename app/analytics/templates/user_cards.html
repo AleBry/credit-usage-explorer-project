@@ -16,9 +16,9 @@
         </div>
         <div class="btn-group" role="group" aria-label="Search mode">
           <a class="btn btn-sm {{ 'btn-primary' if mode != 'advanced' else 'btn-outline-primary' }}"
-             href="{{ url_for('analytics.user_cards_page', mode='basic', name_query=name_query, email_query=email_query) }}">Basic</a>
+             href="{{ url_for('analytics.user_cards_page', mode='basic', name_query=name_query, email_query=email_query, tier_query=tier_query) }}">Basic</a>
           <a class="btn btn-sm {{ 'btn-primary' if mode == 'advanced' else 'btn-outline-primary' }}"
-             href="{{ url_for('analytics.user_cards_page', mode='advanced', name_query=name_query, email_query=email_query) }}">Advanced</a>
+             href="{{ url_for('analytics.user_cards_page', mode='advanced', name_query=name_query, email_query=email_query, tier_query=tier_query) }}">Advanced</a>
         </div>
       </div>
 
@@ -85,6 +85,15 @@
                 {% endfor %}
               </select>
             </div>
+            <div class="col-md-2">
+              <label class="form-label">Tier</label>
+              <select class="form-select form-select-sm" name="tier_query">
+                <option value="">All tiers</option>
+                {% for t in all_tiers_list %}
+                <option value="{{ t }}" {% if tier_query == t %}selected{% endif %}>{{ t }}</option>
+                {% endfor %}
+              </select>
+            </div>
           </div>
           <div class="row g-2 align-items-end mt-1">
             <div class="col-md-2">
@@ -107,7 +116,7 @@
           {% if outlier_rows %}
           <a class="btn btn-outline-success btn-sm ms-auto"
              href="{{ url_for('analytics.user_cards_export_csv', mode='advanced',
-               name_query=name_query, email_query=email_query,
+               name_query=name_query, email_query=email_query, tier_query=tier_query,
                metric=metric, credit_threshold=credit_threshold|int, lookback_days=lookback_days,
                usage_type_filter=usage_type_filter, model_filter=model_filter,
                start_date=start_date, end_date=end_date, top_n=top_n) }}"
@@ -166,6 +175,15 @@
               <input class="form-control form-control-sm" type="date" name="end_date" value="{{ end_date }}">
             </div>
             <div class="col-md-2">
+              <label class="form-label">Tier</label>
+              <select class="form-select form-select-sm" name="tier_query">
+                <option value="">All tiers</option>
+                {% for t in all_tiers_list %}
+                <option value="{{ t }}" {% if tier_query == t %}selected{% endif %}>{{ t }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-2">
               <label class="form-label">&nbsp;</label>
               <a class="btn btn-outline-secondary btn-sm w-100" href="{{ url_for('analytics.user_cards_page') }}">Clear</a>
             </div>
@@ -205,7 +223,7 @@
         <div class="d-flex gap-2 view-controls">
           <a class="btn btn-sm btn-outline-success"
              href="{{ url_for('analytics.user_cards_export_csv', mode='basic',
-               name_query=name_query, email_query=email_query, date_field=date_field,
+               name_query=name_query, email_query=email_query, tier_query=tier_query, date_field=date_field,
                start_date=start_date, end_date=end_date, top_n=top_n,
                min_credits=min_credits, max_credits=max_credits, zero_credits=zero_credits) }}">
             Export CSV
