@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-"""Plain-English display labels for the machine-readable status codes used
+"""
+Discrete math class chapter 1: Plain-English labels for machine-readable status codes.
+Plain-English display labels for the machine-readable status codes used
 throughout Optimization (pressure flags, recommended actions, priorities,
 trends) and the tier-change log's `source` field.
 
