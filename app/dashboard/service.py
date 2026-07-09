@@ -88,10 +88,13 @@ def build_record_view(df: pd.DataFrame, selected_fields: list[str]) -> tuple[lis
     keyed by column, so the template renders every cell the same way."""
     columns = [record_column_meta(c) for c in selected_fields]
     units_present = "usage_units" in df.columns
-    rows = [
-        {c: _format_record_cell(c, rec, units_present) for c in selected_fields}
-        for rec in df.to_dict(orient="records")
-    ]
+    rows = []
+    for rec in df.to_dict(orient="records"):
+        row = {c: _format_record_cell(c, rec, units_present) for c in selected_fields}
+        # Carried even when "email" isn't a displayed column, so the User cell
+        # can always link to that person's summary page.
+        row["_email"] = str(rec.get("email") or "").strip()
+        rows.append(row)
     return columns, rows
 
 

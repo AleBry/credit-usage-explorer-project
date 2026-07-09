@@ -20,6 +20,7 @@ class TierImportResult:
     email_column: str
     tier_column: str
     tier_counts: dict[str, int]
+    codex_access: dict[str, bool]
 
 
 def _normalized_col(value: object) -> str:
@@ -60,6 +61,16 @@ def _normalize_group_label(value: object) -> str:
     if text.startswith("_") and " " in text:
         text = text.lstrip("_").strip()
     return text
+
+
+def is_codex_group_label(value: object) -> bool:
+    """True for groups that grant Codex product access (e.g. "_Codex Users").
+
+    These aren't a credit-governance tier -- they only surface as a profile
+    badge -- so they must never enter a user's tier history/assignment.
+    """
+    text = _normalize_group_label(value).lstrip("_").strip()
+    return text.lower().startswith("codex")
 
 
 def _group_label_score(value: object) -> tuple[int, int, str]:
@@ -209,11 +220,18 @@ def read_tier_assignments_csv(file_obj: Any) -> TierImportResult:
 
     assignments: dict[str, str] = {}
     histories: dict[str, list[str]] = {}
+    codex_access: dict[str, bool] = {}
     tiers: set[str] = set()
     skipped_rows = 0
     for _, row in df.iterrows():
         email = str(row.get(email_col, "") or "").strip().lower()
-        history = extract_tier_names(row.get(tier_col, ""))
+        # The groups cell lists a user's groups oldest-first, most-recent-last.
+        # Codex access is product access, not a governance tier, so it's kept
+        # out of the history entirely rather than treated as "their tier".
+        raw_labels = extract_tier_names(row.get(tier_col, ""))
+        if email and any(is_codex_group_label(label) for label in raw_labels):
+            codex_access[email] = True
+        history = [label for label in raw_labels if not is_codex_group_label(label)]
         tiers.update(history)
         tier = history[-1] if history else ""
         if not email or not tier:
@@ -236,4 +254,5 @@ def read_tier_assignments_csv(file_obj: Any) -> TierImportResult:
         email_column=email_col,
         tier_column=tier_col,
         tier_counts=dict(sorted(tier_counts.items())),
+        codex_access=codex_access,
     )

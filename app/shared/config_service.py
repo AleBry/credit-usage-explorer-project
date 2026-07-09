@@ -47,6 +47,10 @@ class AppConfig:
         self.tier_path = config_dir / "tier_policy_config.yaml"
         self.user_tiers_path = config_dir / "user_tier_assignments.json"
         self.user_tier_history_path = config_dir / "user_tier_history.json"
+        # email -> True for users whose tierlist groups include a Codex-access
+        # group. Codex is product access, not a credit tier, so it's tracked
+        # separately from user_tier_history.json rather than living inside it.
+        self.user_codex_access_path = config_dir / "user_codex_access.json"
         self.alert_rules_path = config_dir / "alert_rules.json"
         # Analyst-written "stories"/notes pinned to specific users, and
         # story-based alert rules (recency / burst / cross-tool) surfaced in the bell.
@@ -170,6 +174,34 @@ class AppConfig:
         self.config_dir.mkdir(parents=True, exist_ok=True)
         self.user_tier_history_path.write_text(
             json.dumps({"histories": dict(sorted(clean.items()))}, indent=2),
+            encoding="utf-8",
+        )
+
+    def load_user_codex_access(self) -> dict[str, bool]:
+        if not self.user_codex_access_path.exists():
+            return {}
+        try:
+            data = json.loads(self.user_codex_access_path.read_text(encoding="utf-8"))
+            access = data.get("codex_access", data) if isinstance(data, dict) else {}
+            if not isinstance(access, dict):
+                return {}
+            return {
+                str(email).strip().lower(): bool(flag)
+                for email, flag in access.items()
+                if str(email).strip() and flag
+            }
+        except Exception:
+            return {}
+
+    def save_user_codex_access(self, codex_access: dict[str, bool]) -> None:
+        clean = {
+            str(email).strip().lower(): True
+            for email, flag in codex_access.items()
+            if str(email).strip() and flag
+        }
+        self.config_dir.mkdir(parents=True, exist_ok=True)
+        self.user_codex_access_path.write_text(
+            json.dumps({"codex_access": dict(sorted(clean.items()))}, indent=2),
             encoding="utf-8",
         )
 

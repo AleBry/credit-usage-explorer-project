@@ -110,51 +110,36 @@
           </div>
 
           <div class="lb-scroll">
-            <table class="lb-table">
-              <thead>
-                <tr>
-                  <th class="w-rank">#</th>
-                  <th>Name</th>
-                  <th>Email</th>
-                  <th>Credits</th>
-                  <th>Records</th>
-                  <th>Token/msg</th>
-                  <th></th>
-                </tr>
-              </thead>
-
-              <tbody>
-                {% for item in lb_users %}
-                <tr class="rank-{{ loop.index }}">
-                  <td class="rank">{{ loop.index }}</td>
-                  <td>{{ item.name or '&mdash;' }}</td>
-                  <td style="color:#8a92a0; font-size:.78rem;">{{ item.email or '&mdash;' }}</td>
-                  <td class="credits">{{ '{:,.2f}'.format(item.total_credits) }}</td>
-                  <td>{{ '{:,}'.format(item.rows) }}</td>
-                  <td>
-                    <div>{{ '{:,.0f}'.format(item.total_tokens) }} tk</div>
-                    <div class="text-muted small">{{ '{:,.0f}'.format(item.total_messages) }} msg</div>
-                  </td>
-                  <td>
-                    <a class="drill-link" href="{{ url_for('analytics.user_summary',
-                        name=item.name or '',
-                        email=item.email or '',
-                        date_field='date_partition',
-                        start_date=start_date,
-                        end_date=end_date,
-                        min_credits=min_credits,
-                        max_credits=max_credits,
-                        zero_credits=zero_credits,
-                        active_tab='records',
-                        fs='1'
-                      ) }}">View &rarr;</a>
-                  </td>
-                </tr>
-                {% else %}
-                <tr><td colspan="7" class="empty-state">No data</td></tr>
-                {% endfor %}
-              </tbody>
-            </table>
+            {% for item in lb_users %}
+            {% set link = url_for('analytics.user_summary',
+                name=item.name or '',
+                email=item.email or '',
+                date_field='date_partition',
+                start_date=start_date,
+                end_date=end_date,
+                min_credits=min_credits,
+                max_credits=max_credits,
+                zero_credits=zero_credits,
+                active_tab='records',
+                fs='1'
+              ) %}
+            <a class="view-list-row rank-{{ loop.index }}" href="{{ link }}">
+              <span class="vlr-rank">{{ loop.index }}</span>
+              <span class="avatar avatar-sm">{{ (item.name or item.email or '?')[:2] }}</span>
+              <span class="vlr-id">
+                <span class="vlr-name">{{ item.name or item.email or 'Unknown user' }}</span>
+                {% if item.email and item.name %}<span class="vlr-email"> &middot; {{ item.email }}</span>{% endif %}
+              </span>
+              <span class="vlr-metrics">
+                <span class="vlr-strong">{{ '{:,.2f}'.format(item.total_credits) }}</span> cr
+                <span class="vlr-sep">&middot;</span> {{ '{:,}'.format(item.rows) }} rec
+                <span class="vlr-sep">&middot;</span> {{ '{:,.0f}'.format(item.total_tokens) }} tok
+              </span>
+              <span class="vlr-caret">&rsaquo;</span>
+            </a>
+            {% else %}
+            <div class="empty-state">No data</div>
+            {% endfor %}
           </div>
         </div>
       </div>
@@ -168,47 +153,36 @@
           </div>
 
           <div class="lb-scroll">
-            <table class="lb-table">
-              <thead>
-                <tr>
-                  <th class="w-rank">#</th>
-                  <th>Name</th>
-                  <th>Usage Type</th>
-                  <th>Credits</th>
-                  <th>Records</th>
-                  <th></th>
-                </tr>
-              </thead>
-
-              <tbody>
-                {% for item in lb_users_by_type %}
-                <tr class="rank-{{ loop.index }}">
-                  <td class="rank">{{ loop.index }}</td>
-                  <td>{{ item.name or item.email or '&mdash;' }}</td>
-                  <td><span class="badge-type {{ item.usage_type_parsed_type }}">{{ item.usage_type_parsed_type }}</span></td>
-                  <td class="credits">{{ '{:,.2f}'.format(item.total_credits) }}</td>
-                  <td>{{ '{:,}'.format(item.rows) }}</td>
-                  <td>
-                    <a class="drill-link" href="{{ url_for('analytics.user_summary',
-                        name=item.name or '',
-                        email=item.email or '',
-                        date_field='date_partition',
-                        start_date=start_date,
-                        end_date=end_date,
-                        min_credits=min_credits,
-                        max_credits=max_credits,
-                        zero_credits=zero_credits,
-                        active_tab='records',
-                        filter_types=[item.usage_type_parsed_type],
-                        fs='1'
-                      ) }}">View &rarr;</a>
-                  </td>
-                </tr>
-                {% else %}
-                <tr><td colspan="6" class="empty-state">No data</td></tr>
-                {% endfor %}
-              </tbody>
-            </table>
+            {% for item in lb_users_by_type %}
+            {% set link = url_for('analytics.user_summary',
+                name=item.name or '',
+                email=item.email or '',
+                date_field='date_partition',
+                start_date=start_date,
+                end_date=end_date,
+                min_credits=min_credits,
+                max_credits=max_credits,
+                zero_credits=zero_credits,
+                active_tab='records',
+                filter_types=[item.usage_type_parsed_type],
+                fs='1'
+              ) %}
+            <a class="view-list-row rank-{{ loop.index }}" href="{{ link }}">
+              <span class="vlr-rank">{{ loop.index }}</span>
+              <span class="avatar avatar-sm">{{ (item.name or item.email or '?')[:2] }}</span>
+              <span class="vlr-id">
+                <span class="vlr-name">{{ item.name or item.email or 'Unknown user' }}</span>
+                <span class="badge-type {{ item.usage_type_parsed_type }} ms-1">{{ item.usage_type_parsed_type }}</span>
+              </span>
+              <span class="vlr-metrics">
+                <span class="vlr-strong">{{ '{:,.2f}'.format(item.total_credits) }}</span> cr
+                <span class="vlr-sep">&middot;</span> {{ '{:,}'.format(item.rows) }} rec
+              </span>
+              <span class="vlr-caret">&rsaquo;</span>
+            </a>
+            {% else %}
+            <div class="empty-state">No data</div>
+            {% endfor %}
           </div>
         </div>
       </div>

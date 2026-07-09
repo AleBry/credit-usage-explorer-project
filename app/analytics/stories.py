@@ -104,10 +104,18 @@ def _month_pace_stats(
     }
 
 
-def story_month_pace(df: pd.DataFrame, tier_config: dict, tier_name: str) -> Story | None:
-    """How much of the period budget the user spent in their most recent month,
-    and how quickly they got there. Respects the weekly->monthly switch date:
-    months before the switch are measured against the weekly-cap budget."""
+def story_month_pace(
+    df: pd.DataFrame, tier_config: dict, tier_name: str, reference_date: object = None,
+) -> Story | None:
+    """How much of the period budget the user spent in their most recent active
+    month, and how quickly they got there. Respects the weekly->monthly switch
+    date: months before the switch are measured against the weekly-cap budget.
+
+    The title is deliberately month-agnostic ("Spend Pace") since the story can
+    describe either an in-progress current month or a stale past one (a quiet
+    user whose last activity predates the workspace's current period) — only
+    the body copy below distinguishes the two, via `is_current_month`.
+    """
     if df.empty:
         return None
     latest = df["_date"].max()
@@ -115,9 +123,15 @@ def story_month_pace(df: pd.DataFrame, tier_config: dict, tier_name: str) -> Sto
     if stats is None:
         return None
 
+    is_current_month = False
+    if reference_date is not None and not pd.isna(reference_date):
+        ref = pd.Timestamp(reference_date)
+        is_current_month = (ref.year, ref.month) == (latest.year, latest.month)
+
     pct = stats["pct"]
     tone = "alert" if pct >= 1.0 else ("notable" if pct >= 0.80 else "info")
     regime_note = f", {tier_name} tier" + (" · weekly caps" if stats["weekly_regime"] else "")
+    title = "Spend Pace"
     headline = (
         f"Spent {pct:.0%} of the {stats['cap_word']} in {stats['month_label']} "
         f"({stats['spend']:,.0f} / {stats['allowance']:,.0f} credits)."
@@ -125,12 +139,14 @@ def story_month_pace(df: pd.DataFrame, tier_config: dict, tier_name: str) -> Sto
     if stats["day_hit_cap"] is not None:
         detail = (f"Burned through the whole {stats['month_label']} budget by day "
                    f"{stats['day_hit_cap']} of {stats['days_in_month']}.")
-    else:
+    elif is_current_month:
         detail = f"Through day {stats['days_elapsed']} of {stats['days_in_month']}{regime_note}."
+    else:
+        detail = f"Their most recent active month{regime_note}."
 
     return Story(
         key="month_pace",
-        title="This month's pace",
+        title=title,
         headline=headline,
         detail=detail,
         tone=tone,
@@ -396,7 +412,7 @@ def build_user_stories(
     if df.empty:
         return []
     candidates = [
-        story_month_pace(df, tier_config, tier_name),
+        story_month_pace(df, tier_config, tier_name, reference_date),
         story_activity(df, reference_date),
         story_pro_then_codex(df),
     ]

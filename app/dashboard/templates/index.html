@@ -210,7 +210,9 @@
               <tr>
                 {% for c in columns %}
                 <td class="{% if c.align == 'right' %}text-end tnum{% endif %}">
-                  {%- if c.clip -%}
+                  {%- if c.key == 'name' and row._email -%}
+                    <a href="{{ url_for('analytics.user_summary', email=row._email) }}" class="cell-clip" title="{{ row[c.key] }}">{{ row[c.key] }}</a>
+                  {%- elif c.clip -%}
                     <span class="cell-clip" title="{{ row[c.key] }}">{{ row[c.key] }}</span>
                   {%- else -%}
                     {{ row[c.key] }}

@@ -275,6 +275,9 @@ def create_settings_blueprint(services) -> Blueprint:
             histories = {} if replace_existing else config_svc.load_user_tier_history()
             histories.update(result.histories)
             config_svc.save_user_tier_history(histories)
+            codex_access = {} if replace_existing else config_svc.load_user_codex_access()
+            codex_access.update(result.codex_access)
+            config_svc.save_user_codex_access(codex_access)
             # Dated record of "as of this submission, the user was on tier X" —
             # distinct from the undated histories above (which get overwritten).
             for imp_email, imp_tier in result.assignments.items():
