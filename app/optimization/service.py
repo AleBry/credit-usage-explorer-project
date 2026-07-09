@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import calendar
 import math
 from dataclasses import dataclass
 from pathlib import Path
@@ -28,9 +29,86 @@ class OptimizationResult:
     latest_summary: dict[str, Any]
 
 
-def tier_caps(tier_config: dict) -> dict[str, float]:
+# Divisor used to turn a monthly cap into a weekly pace. Default 4.0 matches how
+# the monthly caps were derived (4x the old weekly caps). Set weeks_per_month in
+# the tier config to a number (e.g. calendar-accurate ~4.345) or to the string
+# "actual" to divide each month's cap by the real number of weeks in that month.
+DEFAULT_WEEKS_PER_MONTH = 4.0
+# Representative average weeks/month, used only when 'actual' mode is asked for a
+# weekly cap without a specific week to anchor the month.
+CALENDAR_WEEKS_PER_MONTH = 4.345
+
+
+def weeks_in_month(year: int, month: int) -> int:
+    """Weeks (Mondays) that fall within the given calendar month (4 or 5).
+
+    A week is assigned to the month of its Monday, matching how usage is bucketed
+    (week_start = Monday). These counts partition the year, so a tier's weekly
+    caps across a month sum exactly to its monthly cap.
+    """
+    cal = calendar.Calendar(firstweekday=0)  # Monday
+    return sum(1 for d in cal.itermonthdates(year, month)
+               if d.month == month and d.weekday() == 0)
+
+
+def raw_tier_cap(cfg: dict) -> float:
+    """The cap number as stored, regardless of period (period-agnostic read)."""
+    if not isinstance(cfg, dict):
+        return 0.0
+    value = cfg.get("credit_cap", cfg.get("weekly_credit_cap", 0))
+    try:
+        return float(value or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def cap_period(tier_config: dict) -> str:
+    """Global interpretation of stored cap numbers: 'weekly' or 'monthly'."""
+    return str(tier_config.get("cap_period", "weekly") or "weekly").strip().lower()
+
+
+def weeks_per_month_setting(tier_config: dict) -> float | str:
+    """Configured monthly->weekly divisor: a positive float, or 'actual'."""
+    val = tier_config.get("weeks_per_month", DEFAULT_WEEKS_PER_MONTH)
+    if isinstance(val, str) and val.strip().lower() == "actual":
+        return "actual"
+    try:
+        wpm = float(val or 0)
+    except (TypeError, ValueError):
+        wpm = 0.0
+    return wpm or DEFAULT_WEEKS_PER_MONTH
+
+
+def weeks_per_month(tier_config: dict, week_start: object = None) -> float:
+    """Numeric divisor for this config, resolved for a given week if 'actual'."""
+    setting = weeks_per_month_setting(tier_config)
+    if setting != "actual":
+        return float(setting)
+    if week_start is None or pd.isna(week_start):
+        return CALENDAR_WEEKS_PER_MONTH
+    ts = pd.Timestamp(week_start)
+    return float(weeks_in_month(ts.year, ts.month))
+
+
+def tier_caps(tier_config: dict, week_start: object = None) -> dict[str, float]:
+    """Effective *weekly* caps for the engine.
+
+    Stored caps may be weekly or monthly (global `cap_period`, overridable per
+    tier via `cap_period` on the tier). Monthly caps are divided down to a weekly
+    pace so all downstream utilization/pressure math stays weekly and unchanged.
+    In 'actual' weeks-per-month mode, pass `week_start` to divide by the real
+    number of weeks in that week's month; the result is that week's weekly cap.
+    """
     tiers = tier_config.get("tiers") or {}
-    caps = {str(name): float(cfg.get("weekly_credit_cap", 0) or 0) for name, cfg in tiers.items()}
+    global_period = cap_period(tier_config)
+    wpm = weeks_per_month(tier_config, week_start)
+
+    def weekly(cfg: dict) -> float:
+        raw = raw_tier_cap(cfg)
+        period = str(cfg.get("cap_period", global_period) or global_period).strip().lower()
+        return raw / wpm if period == "monthly" else raw
+
+    caps = {str(name): weekly(cfg) for name, cfg in tiers.items()}
     if "Baseline" not in caps:
         caps["Baseline"] = min(caps.values()) if caps else 100.0
     return caps
@@ -192,7 +270,16 @@ def _derive_weekly_from_records(
         True: "assigned",
         False: "default",
     })
-    weekly["weekly_credit_cap"] = weekly["governance_tier"].map(caps).fillna(baseline_cap)
+    # The monthly->weekly divisor can vary by month ('actual' mode), so resolve
+    # caps once per distinct month present, then look up each row's tier.
+    caps_by_month = {
+        (ts.year, ts.month): tier_caps(tier_config, week_start=ts)
+        for ts in pd.to_datetime(weekly["week_start"].dropna().unique())
+    }
+    weekly["weekly_credit_cap"] = [
+        caps_by_month.get((ws.year, ws.month), caps).get(tier, baseline_cap)
+        for ws, tier in zip(weekly["week_start"], weekly["governance_tier"])
+    ]
     weekly["cap_utilization"] = weekly["credits_used"] / weekly["weekly_credit_cap"].replace(0, baseline_cap)
     weekly["remaining_weekly_credits"] = weekly["weekly_credit_cap"] - weekly["credits_used"]
     weekly["pressure_flag"] = weekly["cap_utilization"].apply(pressure_flag)
@@ -261,12 +348,23 @@ def build_user_summary(user_week_history: pd.DataFrame) -> pd.DataFrame:
 def build_recommendations(user_summary: pd.DataFrame, tier_config: dict) -> pd.DataFrame:
     if user_summary.empty:
         return pd.DataFrame()
-    caps = tier_caps(tier_config)
     rows = user_summary.copy()
+    # Resolve the tier ladder on the same weeks-per-month basis as each user's
+    # latest week, so recommended caps line up with latest_weekly_credit_cap.
+    caps_cache: dict[object, dict[str, float]] = {}
+
+    def caps_for(week_start: object) -> dict[str, float]:
+        key = (pd.Timestamp(week_start).year, pd.Timestamp(week_start).month) \
+            if not pd.isna(week_start) else None
+        if key not in caps_cache:
+            caps_cache[key] = tier_caps(tier_config, week_start=week_start)
+        return caps_cache[key]
+
     targets = []
     for _, row in rows.iterrows():
         action = row["recommended_action"]
         direction = 1 if action == "CONSIDER_MOVE_UP_TIER" else (-1 if action == "CONSIDER_MOVE_DOWN_TIER" else 0)
+        caps = caps_for(row.get("latest_week_start"))
         targets.append(next_tier(str(row["latest_governance_tier"]), caps, direction))
     rows["recommended_tier"] = [target[0] for target in targets]
     rows["recommended_weekly_credit_cap"] = [target[1] for target in targets]

@@ -14,6 +14,7 @@ from app.shared.credit_ledger import (
     normalize_credit_entries,
     sync_credit_ledger,
 )
+from app.optimization.service import DEFAULT_WEEKS_PER_MONTH, raw_tier_cap
 from app.shared.ingestion import _infer_week_from_filename
 from app.shared.tier_import import read_tier_assignments_csv
 from .service import force_rmtree, try_snapshot
@@ -204,10 +205,22 @@ def create_settings_blueprint(services) -> Blueprint:
             for name, cap in zip(names, caps):
                 name = name.strip()
                 if name:
-                    tiers_dict[name] = {"weekly_credit_cap": int(float(cap))}
+                    tiers_dict[name] = {"credit_cap": int(float(cap))}
             # Preserve non-tier settings (e.g. the editing lock) already on file.
             cfg = config_svc.load_tiers()
             cfg["tiers"] = tiers_dict
+            # How the caps above are interpreted: weekly or monthly (mutable).
+            period = str(request.form.get("cap_period", "weekly")).strip().lower()
+            cfg["cap_period"] = "monthly" if period == "monthly" else "weekly"
+            # Monthly->weekly divisor: the real weeks in each month, or a fixed number.
+            if str(request.form.get("weeks_per_month_mode", "")).strip().lower() == "actual":
+                cfg["weeks_per_month"] = "actual"
+            else:
+                try:
+                    wpm = float(request.form.get("weeks_per_month", DEFAULT_WEEKS_PER_MONTH) or 0)
+                except (TypeError, ValueError):
+                    wpm = 0.0
+                cfg["weeks_per_month"] = wpm or DEFAULT_WEEKS_PER_MONTH
             config_svc.save_tiers(cfg)
             flash("Tier policy saved.", "success")
         except Exception as exc:
@@ -259,17 +272,19 @@ def create_settings_blueprint(services) -> Blueprint:
 
             tier_cfg = config_svc.load_tiers()
             tiers = tier_cfg.setdefault("tiers", {})
-            baseline_cap = tiers.get("Baseline", {}).get("weekly_credit_cap", 100)
+            # Seed new tiers using stored cap numbers as-is (same period as the
+            # rest of the file); raw_tier_cap reads whichever field is present.
+            baseline_cap = raw_tier_cap(tiers.get("Baseline")) or 100
             cap_overrides = {
-                "Advanced Credit Users": tiers.get("Advanced", {}).get("weekly_credit_cap", 400),
-                "High Credit Consumption Users": tiers.get("Super", {}).get("weekly_credit_cap", 750),
-                "One K Credit Users": tiers.get("Highest", {}).get("weekly_credit_cap", 1000),
-                "Emergency Credit Users": tiers.get("Highest", {}).get("weekly_credit_cap", 1000),
+                "Advanced Credit Users": raw_tier_cap(tiers.get("Advanced")) or 400,
+                "High Credit Consumption Users": raw_tier_cap(tiers.get("Super")) or 750,
+                "One K Credit Users": raw_tier_cap(tiers.get("Highest")) or 1000,
+                "Emergency Credit Users": raw_tier_cap(tiers.get("Highest")) or 1000,
             }
             new_tiers = []
             for tier in sorted(set(result.assignments.values())):
                 if tier not in tiers:
-                    tiers[tier] = {"weekly_credit_cap": int(cap_overrides.get(tier, baseline_cap))}
+                    tiers[tier] = {"credit_cap": int(cap_overrides.get(tier, baseline_cap))}
                     new_tiers.append(tier)
             if new_tiers:
                 config_svc.save_tiers(tier_cfg)

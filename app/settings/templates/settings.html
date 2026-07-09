@@ -581,12 +581,45 @@
         </div>
 
         <form method="post" action="{{ url_for('settings.update_tiers') }}">
+          {% set period = (tiers.cap_period or 'weekly')|lower %}
+          {% set wpm_actual = (tiers.weeks_per_month is string and tiers.weeks_per_month|lower == 'actual') %}
+          <div class="row g-2 align-items-end mb-2">
+            <div class="col-auto">
+              <label class="form-label small mb-1" for="cap_period">Cap period</label>
+              <select class="form-select form-select-sm" id="cap_period" name="cap_period">
+                <option value="weekly" {% if period != 'monthly' %}selected{% endif %}>Weekly</option>
+                <option value="monthly" {% if period == 'monthly' %}selected{% endif %}>Monthly</option>
+              </select>
+            </div>
+            <div class="col-auto">
+              <label class="form-label small mb-1" for="weeks_per_month">Weeks / month</label>
+              <input class="form-control form-control-sm" style="width:7rem" type="number" step="0.001" min="1"
+                     id="weeks_per_month" name="weeks_per_month"
+                     value="{{ 4.0 if wpm_actual else (tiers.weeks_per_month or 4.0) }}"
+                     {% if wpm_actual %}disabled{% endif %}>
+            </div>
+            <div class="col-auto">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" value="actual" id="weeks_per_month_mode"
+                       name="weeks_per_month_mode" {% if wpm_actual %}checked{% endif %}
+                       onchange="document.getElementById('weeks_per_month').disabled = this.checked;">
+                <label class="form-check-label small" for="weeks_per_month_mode">Use actual weeks in each month</label>
+              </div>
+            </div>
+            <div class="col">
+              <p class="text-muted small mb-0">
+                Caps are entered in the selected period. Monthly caps are divided by weeks/month
+                to a weekly pace &mdash; all usage analysis stays weekly. &ldquo;Actual&rdquo; uses the
+                real number of weeks (4 or 5) in each calendar month.
+              </p>
+            </div>
+          </div>
           <div class="table-responsive mb-3">
             <table class="settings-table" id="tier-table">
               <thead>
                 <tr>
                   <th>Tier Name</th>
-                  <th>Weekly Credit Cap</th>
+                  <th>Credit Cap <span class="text-muted">({{ period }})</span></th>
                   <th></th>
                 </tr>
               </thead>
@@ -594,7 +627,7 @@
                 {% for tier_name, tier_cfg in tiers.tiers.items() %}
                 <tr>
                   <td><input class="form-control form-control-sm" type="text" name="tier_name[]" value="{{ tier_name }}" required></td>
-                  <td><input class="form-control form-control-sm" type="number" name="tier_cap[]" value="{{ tier_cfg.weekly_credit_cap }}" min="0" required></td>
+                  <td><input class="form-control form-control-sm" type="number" name="tier_cap[]" value="{{ tier_cfg.credit_cap if tier_cfg.credit_cap is not none else tier_cfg.weekly_credit_cap }}" min="0" required></td>
                   <td><button type="button" class="btn btn-outline-danger btn-sm py-0 px-2" onclick="removeRow(this)">&#x2715;</button></td>
                 </tr>
                 {% endfor %}
