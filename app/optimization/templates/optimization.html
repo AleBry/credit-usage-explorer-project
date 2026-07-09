@@ -85,7 +85,7 @@
               {% for r in rec_summary %}
               <tr>
                 <td>{{ r.recommended_action | fmt_status }}</td>
-                <td>{{ r.review_priority }}</td>
+                <td>{{ r.review_priority | fmt_status }}</td>
                 <td class="text-end">{{ "{:,}".format(r.users) }}</td>
                 <td class="text-end">{{ "{:+,.0f}".format(r.total_recommended_cap_change) }}</td>
                 <td class="text-end">{{ "{:.0%}".format(r.avg_latest_utilization) }}</td>
@@ -152,7 +152,7 @@
         <select class="form-select form-select-sm" name="priority">
           <option value="">All priorities</option>
           {% for p in priorities %}
-          <option value="{{ p }}" {% if filters.priority == p %}selected{% endif %}>{{ p }}</option>
+          <option value="{{ p }}" {% if filters.priority == p %}selected{% endif %}>{{ p | fmt_status }}</option>
           {% endfor %}
         </select>
       </div>
@@ -250,7 +250,7 @@
                   {% endfor %}
                 </select>
                 <div class="text-muted small mt-1">
-                  {% if r.latest_tier_assignment_source == 'assigned' %}assigned{% else %}default{% endif %}
+                  {{ r.latest_tier_assignment_source | fmt_status }}
                 </div>
               </form>
             </td>

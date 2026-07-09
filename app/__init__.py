@@ -13,12 +13,7 @@ from .analytics.routes import create_analytics_blueprint
 from .forecast.routes import create_forecast_blueprint
 from .optimization.routes import create_optimization_blueprint
 from .settings.routes import create_settings_blueprint
-
-
-def _fmt_status(value: str | None) -> str:
-    if not value:
-        return "—"
-    return str(value).replace("_", " ").title()
+from .shared.plain_english import plain_english as _fmt_status
 
 
 def create_app() -> Flask:

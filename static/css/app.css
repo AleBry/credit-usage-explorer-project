@@ -481,6 +481,10 @@ th[data-col]:hover .sort-indicator { opacity: .55; }
 /* Override .records-table's nowrap (same specificity, later in file wins) so
    long tier/action/trend labels wrap inside their cells instead of spilling
    into the next column, and reclaim the wide header padding. */
+.optimization-summary-table thead th,
+.optimization-summary-table tbody td,
+.optimization-tier-table thead th,
+.optimization-tier-table tbody td,
 .optimization-actions-table thead th,
 .optimization-actions-table tbody td {
   white-space: normal;

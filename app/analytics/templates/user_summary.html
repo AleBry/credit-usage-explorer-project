@@ -655,7 +655,7 @@
                   <tr>
                     <td>{{ t.date }}</td>
                     <td>{{ t.tier }}</td>
-                    <td class="text-muted small">{{ t.source }}</td>
+                    <td class="text-muted small">{{ t.source | fmt_status }}</td>
                   </tr>
                   {% endfor %}
                 </tbody>
