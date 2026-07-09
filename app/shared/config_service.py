@@ -297,6 +297,51 @@ class AppConfig:
         entries.append({"date": entry_date, "tier": tier, "source": source})
         self.save_tier_change_log(log)
 
+    def sync_tier_history_to_log(
+        self, email: str, history: list[str], source: str, on_date: str | None = None
+    ) -> None:
+        """Merge an undated tierlist history chain into the dated log.
+
+        A tierlist row only ever tells us the *order* a user moved through
+        groups, never when. The chain (oldest first, current tier last) is
+        the source of truth for that order, so entries belonging to it are
+        always re-emitted in chain order -- even if an unrelated dated event
+        (a manual reset, an older single-tier import) previously landed one
+        of those same tiers earlier in the log with a real date. That real
+        date is kept (real beats "N/A"); only tiers new to the log get
+        stamped with `on_date` -- the import date for a fresh upload, or
+        "N/A" when backfilling history we have no real date for.
+        """
+        key = str(email or "").strip().lower()
+        clean_history = [str(t).strip() for t in (history or []) if str(t).strip()]
+        if not key or not clean_history:
+            return
+        from datetime import date as _date
+        entry_date = on_date if on_date is not None else _date.today().isoformat()
+        log = self.load_tier_change_log()
+        entries = log.get(key, [])
+
+        chain_set = set(clean_history)
+        unrelated = [e for e in entries if e.get("tier") not in chain_set]
+        best_for_tier: dict[str, dict] = {}
+        for e in entries:
+            tier = e.get("tier")
+            if tier not in chain_set:
+                continue
+            current = best_for_tier.get(tier)
+            if current is None or (current.get("date") == "N/A" and e.get("date") != "N/A"):
+                best_for_tier[tier] = e
+
+        rebuilt_chain = [
+            best_for_tier.get(tier) or {"date": entry_date, "tier": tier, "source": source}
+            for tier in clean_history
+        ]
+        new_order = unrelated + rebuilt_chain
+        if new_order == entries:
+            return
+        log[key] = new_order
+        self.save_tier_change_log(log)
+
     # ── Alert read-state (navbar bell "inbox") ──────────────────────────────
     def load_read_alerts(self) -> set[str]:
         """The set of alert ids the user has marked read."""

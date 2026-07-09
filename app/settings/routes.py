@@ -246,6 +246,27 @@ def create_settings_blueprint(services) -> Blueprint:
             flash(f"Error updating tier lock: {exc}", "danger")
         return redirect(url_for("settings.settings_page"))
 
+    @bp.route("/tiers/reset-import", methods=["POST"])
+    def reset_tierlist_data() -> object:
+        """Wipe all tierlist-derived data -- assignments, undated history,
+        Codex-access flags, AND the dated tier_change_log (so the Tier Changes/
+        Stories history is cleared too) -- so a CSV can be re-uploaded from a
+        completely clean slate. This is destructive and cannot be undone."""
+        try:
+            cleared = len(config_svc.load_user_tiers())
+            config_svc.save_user_tiers({})
+            config_svc.save_user_tier_history({})
+            config_svc.save_user_codex_access({})
+            config_svc.save_tier_change_log({})
+            flash(
+                f"Tierlist data cleared ({cleared:,} user assignment(s) removed), "
+                "including dated Tier Changes/Stories history. Re-upload a CSV to repopulate.",
+                "success",
+            )
+        except Exception as exc:
+            flash(f"Error clearing tierlist data: {exc}", "danger")
+        return redirect(url_for("settings.settings_page"))
+
     @bp.route("/tiers/import", methods=["POST"])
     def import_tier_assignments() -> object:
         if "file" not in request.files:
@@ -278,10 +299,13 @@ def create_settings_blueprint(services) -> Blueprint:
             codex_access = {} if replace_existing else config_svc.load_user_codex_access()
             codex_access.update(result.codex_access)
             config_svc.save_user_codex_access(codex_access)
-            # Dated record of "as of this submission, the user was on tier X" —
-            # distinct from the undated histories above (which get overwritten).
-            for imp_email, imp_tier in result.assignments.items():
-                config_svc.record_tier_change(imp_email, imp_tier, "import")
+            # Dated log of "as of this submission, the user's tier history was
+            # X" — distinct from the undated histories above (which get
+            # overwritten each import). Only tiers not already recorded get a
+            # new dated entry, stamped with today (the import date), since a
+            # tierlist row never carries real per-transition dates.
+            for imp_email, imp_history in result.histories.items():
+                config_svc.sync_tier_history_to_log(imp_email, imp_history, "import")
 
             tier_cfg = config_svc.load_tiers()
             tiers = tier_cfg.setdefault("tiers", {})

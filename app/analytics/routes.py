@@ -540,9 +540,11 @@ def create_analytics_blueprint(services) -> Blueprint:
 
         user_tier_changes = []
         try:
-            user_tier_changes = list(reversed(
+            # Stored oldest-first (append-only), so keep that order here too --
+            # e.g. One K then Advanced, even when the date is "N/A".
+            user_tier_changes = list(
                 config_svc.load_tier_change_log().get((email or "").strip().lower(), [])
-            ))
+            )
         except Exception:
             user_tier_changes = []
 

@@ -30,11 +30,6 @@
             <div class="d-flex align-items-center gap-2 mb-1">
               <span class="status-dot {% if pipeline_status.has_historical %}green{% else %}gray{% endif %}"></span>
               <strong>Historical data</strong>
-              {% if pipeline_status.has_historical %}
-              <form method="post" action="{{ url_for('settings.delete_historical') }}" class="d-inline" onsubmit="return confirm('Delete all historical data?');">
-                <button class="btn btn-danger btn-sm py-0 px-2" type="submit">Delete</button>
-              </form>
-              {% endif %}
             </div>
             <div class="text-muted small ps-3">
               {% if pipeline_status.has_historical %}
@@ -506,7 +501,7 @@
           </div>
         </form>
 
-        <form method="post" action="{{ url_for('settings.import_tier_assignments') }}" enctype="multipart/form-data" class="mb-3">
+        <form method="post" action="{{ url_for('settings.import_tier_assignments') }}" enctype="multipart/form-data" class="mb-2">
           <div class="row g-2 align-items-end">
             <div class="col-md-6">
               <label class="form-label">Import tierlist CSV</label>
@@ -528,20 +523,13 @@
           </div>
         </form>
 
-        {# Reset manual tier overrides back to the imported tierlist #}
+        {# Manual tier overrides list -- bulk/global reset actions live in the Danger Zone at the bottom of the page #}
         <div class="border rounded-3 p-3 mb-3">
           <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
             <div>
-              <strong>Reset tiers to tierlist</strong>
-              <div class="text-muted small">Restore users you manually changed back to their imported tierlist value.</div>
+              <strong>Manual tier overrides</strong>
+              <div class="text-muted small">Users whose current tier differs from the imported tierlist value.</div>
             </div>
-            {% if user_tier_count %}
-            <form method="post" action="{{ url_for('optimization.reset_all_user_tiers') }}"
-                  onsubmit="return confirm('Reset ALL user tiers to the imported tierlist? This discards every manual tier override.');">
-              <input type="hidden" name="next" value="{{ url_for('settings.settings_page') }}">
-              <button type="submit" class="btn btn-outline-danger btn-sm">&#8634; Reset all to tierlist</button>
-            </form>
-            {% endif %}
           </div>
 
           {% if tier_overrides %}
@@ -657,16 +645,73 @@
         </a>
       </div>
 
-      {# Danger Zone #}
+      {# Danger Zone -- every bulk delete/reset action on this page lives here #}
       <div class="settings-section" style="border-color:#f5c6cb;">
         <h5 style="color:#dc3545;">Danger Zone</h5>
         <p class="text-muted small mb-3">
-          Permanently deletes all uploaded data files, pipeline outputs, and forecast snapshots.
-          Contract and tier settings are preserved. The app will revert to the default demo data.
+          All permanent, bulk delete/reset actions are collected here. Per-row deletes (a single
+          uploaded week, a single credit ledger entry, a single user's tier reset) stay next to
+          the row they affect; only whole-dataset actions live in this section.
         </p>
-        <button type="button" class="btn btn-danger btn-sm" data-bs-toggle="modal" data-bs-target="#clearDataModal">
-          Clear All Data
-        </button>
+
+        {% if pipeline_status.has_historical %}
+        <div class="d-flex align-items-center justify-content-between gap-2 py-2 border-bottom">
+          <div>
+            <strong>Delete historical data</strong>
+            <div class="text-muted small">Removes all {{ pipeline_status.historical_weeks }} ingested historical week(s).</div>
+          </div>
+          <form method="post" action="{{ url_for('settings.delete_historical') }}" onsubmit="return confirm('Delete all historical data?');">
+            <button class="btn btn-danger btn-sm" type="submit">Delete</button>
+          </form>
+        </div>
+        {% endif %}
+
+        <div class="py-2 border-bottom">
+          <div class="alert alert-danger d-flex align-items-start gap-2 mb-2" role="alert">
+            <span style="font-size:1.2rem; line-height:1;">&#9888;&#65039;</span>
+            <div>
+              <strong>Warning: this permanently deletes data.</strong>
+              <div class="small">
+                Clicking "Reset tierlist data" below erases every user's tier assignment, tier history, and
+                Codex-access flag &mdash; <strong>including manual overrides</strong> &mdash; and also wipes the
+                dated Tier Changes history shown in Stories/user-summary. There is no undo. You will need to
+                re-upload the tierlist CSV afterward to repopulate anything.
+              </div>
+            </div>
+          </div>
+          <form method="post" action="{{ url_for('settings.reset_tierlist_data') }}"
+                onsubmit="return confirm('Delete ALL tierlist data -- every user\'s tier assignment, tier history, Codex-access flag (including manual overrides), AND the dated Tier Changes/Stories history? This cannot be undone; you will need to re-upload the CSV.');">
+            <button type="submit" class="btn btn-danger btn-sm">&#128465; Reset tierlist data (delete all, then re-upload)</button>
+            <span class="text-muted small ms-2">Clears assignments/history/Codex flags/dated Tier Changes so the next upload starts from a clean slate.</span>
+          </form>
+        </div>
+
+        {% if user_tier_count %}
+        <div class="d-flex align-items-center justify-content-between gap-2 py-2 border-bottom">
+          <div>
+            <strong>Reset all tiers to tierlist</strong>
+            <div class="text-muted small">Restore every user you manually changed back to their imported tierlist value.</div>
+          </div>
+          <form method="post" action="{{ url_for('optimization.reset_all_user_tiers') }}"
+                onsubmit="return confirm('Reset ALL user tiers to the imported tierlist? This discards every manual tier override.');">
+            <input type="hidden" name="next" value="{{ url_for('settings.settings_page') }}">
+            <button type="submit" class="btn btn-danger btn-sm">&#8634; Reset all to tierlist</button>
+          </form>
+        </div>
+        {% endif %}
+
+        <div class="d-flex align-items-center justify-content-between gap-2 pt-2">
+          <div>
+            <strong>Clear All Data</strong>
+            <div class="text-muted small">
+              Permanently deletes all uploaded data files, pipeline outputs, and forecast snapshots.
+              Contract and tier settings are preserved. The app will revert to the default demo data.
+            </div>
+          </div>
+          <button type="button" class="btn btn-danger btn-sm" data-bs-toggle="modal" data-bs-target="#clearDataModal">
+            Clear All Data
+          </button>
+        </div>
       </div>
 
     </div>

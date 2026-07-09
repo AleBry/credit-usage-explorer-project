@@ -8,12 +8,6 @@
 {% block body %}
     <div class="container py-4" style="max-width: 1280px;">
 
-      <!-- HEADER -->
-      <div class="mb-3">
-        <h1 class="page-title">User Summary</h1>
-        <p class="page-subtitle">Review usage totals, summaries, and raw records for one user.</p>
-      </div>
-
       <!-- USER HERO -->
       <div class="user-hero">
 
@@ -473,7 +467,6 @@
                 <thead>
                   <tr>
                     <th>Week</th>
-                    <th>Tier</th>
                     <th class="text-end">Credits</th>
                     <th class="text-end">Cap</th>
                     <th class="text-end">Utilization</th>
@@ -484,7 +477,6 @@
                   {% for h in optimization_history %}
                   <tr>
                     <td>{{ h.week_start }}</td>
-                    <td>{{ h.governance_tier }}</td>
                     <td class="text-end">{{ "{:,.0f}".format(h.credits_used|float) }}</td>
                     <td class="text-end">{{ "{:,.0f}".format(h.weekly_credit_cap|float) }}</td>
                     <td class="text-end">{{ "{:.0%}".format(h.cap_utilization|float) }}</td>
