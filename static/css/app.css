@@ -515,6 +515,38 @@ th[data-col]:hover .sort-indicator { opacity: .55; }
 .tier-switch-form select {
   width: 100%;
 }
+/* Story Matches: fixed layout at 100% width so all columns (incl. Cap regime)
+   fit without a horizontal scrollbar; long labels wrap inside their cells.
+   Same records-table nowrap override trick as the optimization tables. */
+.story-matches-table {
+  table-layout: fixed;
+  width: 100%;
+  min-width: 0;
+}
+.story-matches-table thead th,
+.story-matches-table tbody td {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  vertical-align: middle;
+  padding-left: .6rem;
+  padding-right: .6rem;
+  line-height: 1.25;
+}
+.story-matches-table th:first-child,
+.story-matches-table td:first-child { width: 26%; }
+.story-matches-table .sm-user {
+  display: flex;
+  align-items: center;
+  gap: .55rem;
+  min-width: 0;
+}
+.story-matches-table .sm-user .sm-id { min-width: 0; }
+.story-matches-table .sm-user .sm-id > * {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 .filter-bar {
   background: var(--surface);

@@ -804,22 +804,36 @@ if (typeof Chart !== 'undefined') {
   function buildProjPts(granularity) {
     const pts = [[latestDate, remaining]];
     const base = new Date(latestDate);
-    if (granularity === 'daily') {
-      const totalDays = Math.min(Math.ceil(weeksLeft * 7) + 1, 420);
-      const dailyBurn = weeklyBurn / 7;
-      for (let i = 1; i <= totalDays; i++) {
-        const d = new Date(base);
-        d.setDate(d.getDate() + i);
-        const rem = Math.max(remaining - dailyBurn * i, 0);
-        pts.push([d.toISOString().slice(0, 10), rem]);
+    const dateAfterDays = days => {
+      const d = new Date(base);
+      d.setDate(d.getDate() + days);
+      return d.toISOString().slice(0, 10);
+    };
+    const dailyBurn = weeklyBurn / 7;
+    // Calendar day the projection crosses zero — same floor convention as the
+    // stated exhaustion date (latest + remaining/burn, truncated to a date).
+    // Every point from that day on reads 0, so hovering the exhaustion date
+    // says 0 rather than the few-hundred-credit remainder of the last whole
+    // step before the crossing.
+    const crossDateStr = (dailyBurn > 0 && remaining > 0)
+      ? dateAfterDays(Math.floor(remaining / dailyBurn))
+      : null;
+    let crossInserted = false;
+    const stepDays = granularity === 'daily' ? 1 : 7;
+    const steps = granularity === 'daily'
+      ? Math.min(Math.ceil(weeksLeft * 7) + 1, 420)
+      : Math.min(Math.ceil(weeksLeft) + 1, 60);
+    for (let i = 1; i <= steps; i++) {
+      const days = i * stepDays;
+      const dstr = dateAfterDays(days);
+      if (crossDateStr && !crossInserted && dstr >= crossDateStr) {
+        if (dstr > crossDateStr) pts.push([crossDateStr, 0]);
+        crossInserted = true;
       }
-    } else {
-      for (let i = 1; i <= Math.min(Math.ceil(weeksLeft) + 1, 60); i++) {
-        const d = new Date(base);
-        d.setDate(d.getDate() + i * 7);
-        const rem = Math.max(remaining - weeklyBurn * i, 0);
-        pts.push([d.toISOString().slice(0, 10), rem]);
-      }
+      const rem = (crossDateStr && dstr >= crossDateStr)
+        ? 0
+        : Math.max(remaining - dailyBurn * days, 0);
+      pts.push([dstr, rem]);
     }
     return pts;
   }

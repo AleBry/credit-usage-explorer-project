@@ -35,8 +35,8 @@
           <span class="badge bg-secondary">{{ '{:,}'.format(matches | length) }} user{{ '' if matches | length == 1 else 's' }}</span>
         </div>
 
-        <div class="table-responsive" style="max-height:75vh; overflow:auto;">
-          <table class="table table-sm table-hover records-table mb-0">
+        <div style="max-height:75vh; overflow-y:auto; overflow-x:hidden;">
+          <table class="table table-sm table-hover records-table story-matches-table mb-0">
             <thead>
               <tr>
                 <th data-col="user" onclick="sortByCol(this)">User <span class="sort-indicator"></span></th>
@@ -60,9 +60,14 @@
               {% for m in matches %}
               <tr>
                 <td>
-                  <a class="fw-semibold text-decoration-none"
-                     href="{{ url_for('analytics.user_summary', email=m.email, active_tab='stories') }}">{{ m.name or m.email }}</a>
-                  <div class="text-muted small">{{ m.email }}</div>
+                  <div class="sm-user">
+                    <span class="avatar avatar-sm">{{ (m.name or m.email or '?')[:2] }}</span>
+                    <span class="sm-id">
+                      <a class="fw-semibold text-decoration-none" title="{{ m.name or m.email }}"
+                         href="{{ url_for('analytics.user_summary', email=m.email, active_tab='stories') }}">{{ m.name or m.email }}</a>
+                      <span class="text-muted small" title="{{ m.email }}">{{ m.email }}</span>
+                    </span>
+                  </div>
                 </td>
                 <td>{{ m.tier }}</td>
                 {% if metric == 'burst_cap' %}

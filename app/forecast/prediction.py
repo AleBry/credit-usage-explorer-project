@@ -105,9 +105,23 @@ class DeterministicModel(PredictionModel):
     def _project(start: date, remaining: float, weekly_burn: float, weeks: float) -> list[dict]:
         pts = [{"date": str(start), "value": remaining}]
         n = min(math.ceil(weeks) + 1, 260)
+        # Calendar day the projection crosses zero — same floor convention as
+        # the stated exhaustion date. Grid points from that day on read 0, so
+        # the exhaustion date itself never shows the sub-step remainder.
+        daily_burn = weekly_burn / 7 if weekly_burn > 0 else 0.0
+        cross = (
+            start + timedelta(days=int(remaining // daily_burn))
+            if daily_burn > 0 and remaining > 0 else None
+        )
+        cross_inserted = False
         for i in range(1, n + 1):
             d = start + timedelta(days=i * 7)
-            rem = max(remaining - weekly_burn * i, 0.0)
+            if cross is not None and not cross_inserted and d >= cross:
+                if d > cross:
+                    pts.append({"date": str(cross), "value": 0.0})
+                cross_inserted = True
+            rem = 0.0 if (cross is not None and d >= cross) \
+                else max(remaining - weekly_burn * i, 0.0)
             pts.append({"date": str(d), "value": rem})
             if rem == 0.0:
                 break
