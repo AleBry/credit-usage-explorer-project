@@ -32,7 +32,12 @@
       <div class="section-card">
         <div class="d-flex justify-content-between align-items-center mb-3">
           <h5 class="mb-0">{{ metric_label }}</h5>
-          <span class="badge bg-secondary">{{ '{:,}'.format(matches | length) }} user{{ '' if matches | length == 1 else 's' }}</span>
+          <div class="d-flex align-items-center gap-2">
+            <a class="btn btn-outline-success btn-sm py-0 px-2" style="font-size:.74rem;"
+               title="Download the rows below for this condition and window"
+               href="{{ url_for('analytics.story_matches_export_csv', metric=metric, days=days) }}">Export CSV</a>
+            <span class="badge bg-secondary">{{ '{:,}'.format(matches | length) }} user{{ '' if matches | length == 1 else 's' }}</span>
+          </div>
         </div>
 
         <div style="max-height:75vh; overflow-y:auto; overflow-x:hidden;">

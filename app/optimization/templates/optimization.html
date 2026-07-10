@@ -14,12 +14,6 @@
       <h1 class="page-title">Optimization</h1>
       <p class="page-subtitle">Review tier pressure, cap utilization, and recommended actions from current project records.</p>
     </div>
-    <a class="btn btn-outline-success btn-sm" href="{{ url_for('optimization.optimization_export_csv',
-      q=filters.q, action=filters.action, priority=filters.priority,
-      current_tier=filters.current_tier, recommended_tier=filters.recommended_tier,
-      min_util=filters.min_util, max_util=filters.max_util,
-      min_avg_credits=filters.min_avg_credits, max_avg_credits=filters.max_avg_credits,
-      sort_by=sort_by, sort_order=sort_order) }}">Export filtered CSV</a>
   </div>
 
   {% if not result.user_week_history.empty %}
@@ -214,6 +208,14 @@
                   title="Move every user with an actionable up/down recommendation to their recommended tier">&#9889; Apply all actionable</button>
         </form>
         {% endif %}
+        <a class="btn btn-outline-success btn-sm py-0 px-2" style="font-size:.74rem;"
+           title="Download the rows below (current filters and sort applied)"
+           href="{{ url_for('optimization.optimization_export_csv',
+             q=filters.q, action=filters.action, priority=filters.priority,
+             current_tier=filters.current_tier, recommended_tier=filters.recommended_tier,
+             min_util=filters.min_util, max_util=filters.max_util,
+             min_avg_credits=filters.min_avg_credits, max_avg_credits=filters.max_avg_credits,
+             sort_by=sort_by, sort_order=sort_order) }}">Export CSV</a>
         <span class="badge bg-secondary">{{ "{:,}".format(recommendation_count) }}</span>
       </div>
     </div>

@@ -553,10 +553,9 @@ def create_analytics_blueprint(services) -> Blueprint:
             reference_date=str(reference_date.date()) if reference_date is not None and not pd.isna(reference_date) else "",
         )
 
-    @bp.route("/story-matches", methods=["GET"])
-    def story_matches() -> str:
-        """Everyone who triggered a story metric — the click-through target for
-        org-wide story alerts like 'N users burned through their cap in 30 days'."""
+    def _story_matches_data() -> tuple[str, int, list[dict], object]:
+        """Metric, window, and matching users from the request args — shared by
+        the story-matches page and its CSV export."""
         from app.analytics.stories import STORY_ALERT_METRICS, story_metric_matches
 
         d = data()
@@ -581,7 +580,15 @@ def create_analytics_blueprint(services) -> Blueprint:
         tiers = gov.resolved_assignments()
         for m in matches:
             m["tier"] = tiers.get(m["email"], "Baseline")
+        return metric, days, matches, reference_date
 
+    @bp.route("/story-matches", methods=["GET"])
+    def story_matches() -> str:
+        """Everyone who triggered a story metric — the click-through target for
+        org-wide story alerts like 'N users burned through their cap in 30 days'."""
+        from app.analytics.stories import STORY_ALERT_METRICS
+
+        metric, days, matches, reference_date = _story_matches_data()
         return render_template(
             "story_matches.html",
             metric=metric,
@@ -590,6 +597,33 @@ def create_analytics_blueprint(services) -> Blueprint:
             days=days,
             matches=matches,
             reference_date=str(reference_date.date()) if reference_date is not None and not pd.isna(reference_date) else "",
+        )
+
+    @bp.route("/story-matches/export.csv", methods=["GET"])
+    def story_matches_export_csv() -> object:
+        metric, days, matches, _ = _story_matches_data()
+        per_metric = {
+            "burst_cap": [
+                (f"Peak {days}-day spend", "peak_spend"),
+                ("Month's allowance", "monthly_cap"),
+                ("% of allowance", "_pct"),
+                ("Window ended", "window_end"),
+                ("Cap regime", "cap_regime"),
+            ],
+            "inactive": [("Days inactive", "days_inactive"), ("Last active", "last_active")],
+            "pro_codex": [("Same-day Pro+Codex days", "times"), ("Most recent", "last_date")],
+        }
+        columns = [("Name", "name"), ("Email", "email"), ("Tier", "tier")] + per_metric.get(metric, [])
+        export_rows = []
+        for m in matches:
+            row = dict(m)
+            if row.get("pct_of_cap") is not None:
+                row["_pct"] = round(float(row["pct_of_cap"]) * 100, 1)
+            export_rows.append({label: row.get(key, "") for label, key in columns})
+        return csv_response(
+            pd.DataFrame(export_rows, columns=[label for label, _ in columns]),
+            f"story_matches_{metric}.csv",
+            filters=[("days", days)],
         )
 
     @bp.route("/user-cards", methods=["GET"])
