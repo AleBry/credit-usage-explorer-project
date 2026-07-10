@@ -197,20 +197,15 @@ def compute_alerts(services) -> list[dict]:
     # 2b. Story-based alert rules (recency / burst / cross-tool, per user)
     try:
         from app.analytics.stories import evaluate_story_rules
-        from app.optimization.service import tier_monthly_caps
 
-        tcfg = config_svc.load_tiers()
-        mcaps = tier_monthly_caps(tcfg)
-        default_cap = mcaps.get("Baseline", 400.0)
-        cap_by_email = {
-            str(e).strip().lower(): mcaps.get(str(t), default_cap)
-            for e, t in config_svc.load_user_tiers().items()
-        }
+        gov = services.governance
+        cap_by_email, default_cap = gov.monthly_cap_by_email()
         ref = None
         if df is not None and "date_partition" in getattr(df, "columns", []):
             ref = pd.to_datetime(df["date_partition"], errors="coerce").max()
         alerts += evaluate_story_rules(
-            df, config_svc.load_story_alert_rules(), cap_by_email, default_cap, ref
+            df, config_svc.load_story_alert_rules(), cap_by_email, default_cap, ref,
+            cap_change_date=gov.tier_config().get("cap_period_change_date"),
         )
     except Exception:
         pass

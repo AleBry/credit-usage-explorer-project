@@ -64,19 +64,17 @@ def register_alerts_routes(bp, services) -> None:
         story_hits: dict = {}
         try:
             from app.analytics.stories import STORY_ALERT_METRICS, evaluate_story_rules
-            from app.optimization.service import tier_monthly_caps
 
-            mcaps = tier_monthly_caps(config_svc.load_tiers())
-            default_cap = mcaps.get("Baseline", 400.0)
-            cap_by_email = {
-                str(e).strip().lower(): mcaps.get(str(t), default_cap)
-                for e, t in config_svc.load_user_tiers().items()
-            }
+            gov = services.governance
+            cap_by_email, default_cap = gov.monthly_cap_by_email()
             ref = pd.to_datetime(df["date_partition"], errors="coerce").max() \
                 if "date_partition" in df.columns else None
             story_hits = {
                 a["id"].split("story:", 1)[-1]: a["detail"]
-                for a in evaluate_story_rules(df, story_rules, cap_by_email, default_cap, ref)
+                for a in evaluate_story_rules(
+                    df, story_rules, cap_by_email, default_cap, ref,
+                    cap_change_date=gov.tier_config().get("cap_period_change_date"),
+                )
             }
         except Exception:
             STORY_ALERT_METRICS = {}

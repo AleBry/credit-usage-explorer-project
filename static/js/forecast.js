@@ -716,6 +716,43 @@ window.setBurndownColor = function(key, val) {
 /* ===================================================================== *
  * Burndown chart
  * ===================================================================== */
+
+// Vertical markers where credit-ledger entries land (purchases / gifted
+// credits), so a mid-contract grant is visible as the reason the remaining
+// line steps up. Set chart.$creditEvents = [{effective_date, label}].
+if (typeof Chart !== 'undefined') {
+  Chart.register({
+    id: 'bnl-credit-events',
+    afterDraw(chart) {
+      const events = chart.$creditEvents;
+      if (!events || !events.length) return;
+      const labels = chart.data.labels || [];
+      const { ctx, chartArea: { top, bottom } } = chart;
+      events.forEach((ev, i) => {
+        let idx = labels.indexOf(ev.effective_date);
+        if (idx < 0) idx = labels.findIndex(l => String(l) >= ev.effective_date);
+        if (idx < 0) return;
+        const x = chart.scales.x.getPixelForValue(idx);
+        if (!Number.isFinite(x)) return;
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(x, top);
+        ctx.lineTo(x, bottom);
+        ctx.lineWidth = 1.5;
+        ctx.strokeStyle = 'rgba(25,135,84,.85)';
+        ctx.setLineDash([2, 3]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = 'rgba(25,135,84,.95)';
+        ctx.font = '10px sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText(ev.label || 'credits added', x + 4, top + 12 + i * 12);
+        ctx.restore();
+      });
+    },
+  });
+}
+
 (function () {
   if (!document.getElementById('burndownChart')) return;
   const rawData    = D.weeklyChartData || [];
@@ -727,18 +764,27 @@ window.setBurndownColor = function(key, val) {
   const latestDate = D.latestDate;
   const contractStartDate = D.contractStartDate;
 
+  // Credits available as of a date = sum of ledger entries effective by then,
+  // so a mid-contract grant steps the line up on its date instead of
+  // inflating the whole history back to contract start.
+  const creditEvents = (D.creditEvents || []).filter(e => e && e.effective_date && e.credits > 0);
+  const addedBy = dateStr => creditEvents.length
+    ? creditEvents.reduce((s, e) => s + (e.effective_date <= dateStr ? e.credits : 0), 0)
+    : purchased;
+
   const inContractRaw = rawData.filter(w => w.in_contract).sort((a,b) => a.week_start < b.week_start ? -1 : 1);
-  let r = purchased;
+  let cumUsed = 0;
   const actualRawPts = inContractRaw.map(w => {
-    r = Math.max(r - w.total_credits_used, 0);
+    cumUsed += w.total_credits_used;
     const d = new Date((w.week_end || w.week_start) + 'T12:00:00');
     d.setDate(d.getDate() + 1);
-    const pointDate = d.toISOString().slice(0, 10);
-    return [pointDate > latestDate ? latestDate : pointDate, r];
+    let pointDate = d.toISOString().slice(0, 10);
+    pointDate = pointDate > latestDate ? latestDate : pointDate;
+    return [pointDate, Math.max(addedBy(pointDate) - cumUsed, 0)];
   });
   const actualPts = [];
   if (contractStartDate && (!latestDate || contractStartDate <= latestDate)) {
-    actualPts.push([contractStartDate, purchased]);
+    actualPts.push([contractStartDate, addedBy(contractStartDate)]);
   }
   actualRawPts.forEach(pt => {
     if (actualPts.length && actualPts[actualPts.length - 1][0] === pt[0]) {
@@ -1026,6 +1072,13 @@ window.setBurndownColor = function(key, val) {
       },
     },
   }, { exportName: 'Credit Burndown' });
+
+  // Show where each ledger entry (purchase / gifted grace credits) lands.
+  // The initial purchase at contract start is implicit, so only mark
+  // mid-contract additions.
+  window.burndownChart.chart.$creditEvents = creditEvents.filter(
+    e => contractStartDate && e.effective_date > contractStartDate
+  );
 
   // On-chart legend (baked into the PNG export). Default off for a clean plot.
   window.toggleChartLegend = function (on) {

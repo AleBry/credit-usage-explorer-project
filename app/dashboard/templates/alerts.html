@@ -191,7 +191,13 @@
                 {% if not r.enabled %}
                 <span class="text-muted small">disabled</span>
                 {% elif story_hits.get(r.id) %}
-                <span class="badge bg-warning text-dark" title="{{ story_hits.get(r.id) }}">&#9679; triggering</span>
+                {% if r.email %}
+                <a class="badge bg-warning text-dark text-decoration-none" title="{{ story_hits.get(r.id) }}"
+                   href="{{ url_for('analytics.user_summary', email=r.email, active_tab='stories') }}">&#9679; triggering</a>
+                {% else %}
+                <a class="badge bg-warning text-dark text-decoration-none" title="{{ story_hits.get(r.id) }} — click to see who"
+                   href="{{ url_for('analytics.story_matches', metric=r.metric, days=r.days) }}">&#9679; triggering</a>
+                {% endif %}
                 {% else %}
                 <span class="text-muted small">quiet</span>
                 {% endif %}

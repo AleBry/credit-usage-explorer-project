@@ -206,6 +206,13 @@
       <div class="d-flex align-items-center gap-2">
         {% if tier_editing_locked %}
         <span class="badge bg-warning text-dark" title="Unlock tier editing in Settings to change tiers.">&#128274; Tier editing locked</span>
+        {% else %}
+        <form method="post" action="{{ url_for('optimization.apply_all_recommendations') }}" class="m-0"
+              onsubmit="return confirm('Apply every ACTIONABLE tier recommendation? Each user with an up/down recommendation will be moved to their recommended tier (logged in their tier-change history).');">
+          <input type="hidden" name="next" value="{{ return_to }}">
+          <button type="submit" class="btn btn-outline-primary btn-sm"
+                  title="Move every user with an actionable up/down recommendation to their recommended tier">&#9889; Apply all actionable</button>
+        </form>
         {% endif %}
         <span class="badge bg-secondary">{{ "{:,}".format(recommendation_count) }}</span>
       </div>
@@ -251,7 +258,17 @@
                 </select>
               </form>
             </td>
-            <td>{{ r.recommended_tier }}</td>
+            <td>
+              {{ r.recommended_tier }}
+              {% if not tier_editing_locked and r.review_priority == 'ACTIONABLE' and r.recommended_tier != r.latest_governance_tier %}
+              <form method="post" action="{{ url_for('optimization.apply_recommendation') }}" class="m-0 mt-1">
+                <input type="hidden" name="email" value="{{ r.email }}">
+                <input type="hidden" name="next" value="{{ return_to }}">
+                <button type="submit" class="btn btn-outline-primary btn-sm py-0 px-2"
+                        title="Set {{ r.email }} to {{ r.recommended_tier }}">Apply</button>
+              </form>
+              {% endif %}
+            </td>
             <td>{{ r.recommended_action | fmt_status }}</td>
             <td>{{ r.review_priority | fmt_status }}</td>
             <td class="text-end">{{ "{:.0%}".format(r.latest_cap_utilization) }}</td>

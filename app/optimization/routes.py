@@ -10,7 +10,6 @@ from flask import Blueprint, Response, flash, redirect, render_template, request
 from .service import (
     build_optimization_result,
     is_codex_access_tier,
-    resolve_governance_assignments,
     tier_caps,
 )
 
@@ -36,15 +35,10 @@ def create_optimization_blueprint(services) -> Blueprint:
     bp = Blueprint("optimization", __name__, template_folder="templates", url_prefix="")
 
     def _result():
-        tier_cfg = config_svc.load_tiers()
         # Codex groups are product access, not credit tiers — resolve them to the
         # user's real governance tier so they don't skew the optimization math.
-        assignments = resolve_governance_assignments(
-            config_svc.load_user_tiers(),
-            config_svc.load_user_tier_history(),
-            tier_caps(tier_cfg),
-        )
-        return build_optimization_result(store.data.df, tier_cfg, assignments)
+        gov = services.governance
+        return build_optimization_result(store.data.df, gov.tier_config(), gov.resolved_assignments())
 
     def _slug(value: object, max_chars: int = 36) -> str:
         text = str(value or "").strip().lower()
@@ -224,6 +218,71 @@ def create_optimization_blueprint(services) -> Blueprint:
             config_svc.record_tier_change(email, "Baseline", "manual-reset")
             flash(f"Tier reset to Baseline default for {email}.", "success")
         config_svc.save_user_tiers(assignments)
+        return redirect(next_url)
+
+    def _apply_recommendations(only_email: str = "") -> tuple[int, list[str]]:
+        """Set tier = recommended tier from the current optimization result.
+
+        Applies to one user (only_email) or to every ACTIONABLE recommendation.
+        Returns (applied_count, ["email -> tier", ...] sample). Each change is
+        recorded in the dated tier-change log with source "recommendation"."""
+        rec = _result().recommendations
+        if rec is None or rec.empty:
+            return 0, []
+        rows = rec
+        if only_email:
+            rows = rec[rec["email"].astype(str).str.lower() == only_email]
+        else:
+            rows = rec[
+                (rec["review_priority"] == "ACTIONABLE")
+                & (rec["recommended_tier"].astype(str) != rec["latest_governance_tier"].astype(str))
+            ]
+        assignments = config_svc.load_user_tiers()
+        valid_tiers = tier_caps(config_svc.load_tiers())
+        applied: list[str] = []
+        for _, row in rows.iterrows():
+            email = str(row.get("email", "")).strip().lower()
+            target = str(row.get("recommended_tier", "")).strip()
+            if not email or not target or target not in valid_tiers:
+                continue
+            if str(row.get("latest_governance_tier", "")) == target and not only_email:
+                continue
+            assignments[email] = target
+            config_svc.record_tier_change(email, target, "recommendation")
+            applied.append(f"{email} -> {target}")
+        if applied:
+            config_svc.save_user_tiers(assignments)
+        return len(applied), applied
+
+    @bp.route("/optimization/user-tier/apply-recommendation", methods=["POST"])
+    def apply_recommendation() -> object:
+        email = request.form.get("email", "").strip().lower()
+        next_url = _safe_next()
+        if config_svc.is_tier_editing_locked():
+            flash("Tier editing is locked. Unlock it in Settings to change tiers.", "warning")
+            return redirect(next_url)
+        if not email:
+            flash("No user selected.", "warning")
+            return redirect(next_url)
+        count, applied = _apply_recommendations(only_email=email)
+        if count:
+            flash(f"Applied recommendation: {applied[0]}.", "success")
+        else:
+            flash(f"No applicable recommendation for {email}.", "warning")
+        return redirect(next_url)
+
+    @bp.route("/optimization/user-tier/apply-all-recommendations", methods=["POST"])
+    def apply_all_recommendations() -> object:
+        next_url = _safe_next()
+        if config_svc.is_tier_editing_locked():
+            flash("Tier editing is locked. Unlock it in Settings to change tiers.", "warning")
+            return redirect(next_url)
+        count, applied = _apply_recommendations()
+        if count:
+            sample = "; ".join(applied[:5]) + ("; ..." if count > 5 else "")
+            flash(f"Applied {count} recommended tier change(s): {sample}", "success")
+        else:
+            flash("No actionable tier recommendations to apply.", "info")
         return redirect(next_url)
 
     @bp.route("/optimization/user-tier/reset", methods=["POST"])

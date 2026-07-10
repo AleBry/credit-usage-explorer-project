@@ -30,24 +30,11 @@ def create_analytics_blueprint(services) -> Blueprint:
             return default
         return max(min_value, min(value, max_result_limit))
 
-    def _governance_tier_map() -> dict[str, str]:
-        """email(lowercased) -> resolved governance tier, same resolution
-        Optimization uses (Codex resolved out, unless it's a user's only tier)."""
-        from app.optimization.service import resolve_governance_assignments, tier_caps
-
-        tier_cfg = config_svc.load_tiers()
-        raw_assignments = config_svc.load_user_tiers()
-        tier_histories = config_svc.load_user_tier_history()
-        return resolve_governance_assignments(raw_assignments, tier_histories, tier_caps(tier_cfg))
-
     def _tier_column(df: pd.DataFrame) -> pd.Series:
-        governance = _governance_tier_map()
-        return df["email"].astype(str).str.strip().str.lower().map(governance).fillna("Baseline")
+        return services.governance.tier_column(df)
 
     def _tier_options(d: CreditUsageData) -> list[str]:
-        if "email" not in d.df.columns:
-            return []
-        return sorted(_tier_column(d.df).unique().tolist())
+        return services.governance.tier_options(d.df)
 
     def _leaderboard_filtered_df(d: CreditUsageData) -> pd.DataFrame:
         usage_type_filter = request.args.get("usage_type_filter", "")
@@ -419,164 +406,12 @@ def create_analytics_blueprint(services) -> Blueprint:
             if float(s.get("total_credits", 0)) > 0
         ])
 
-        optimization_user = None
-        optimization_history = []
-        optimization_tier_history = []
-        optimization_tier_moves = []
-        optimization_source = ""
-        optimization_assigned_tier_count = 0
-        has_codex_access = False
+        # Everything about the user themself (recommendation, tier history,
+        # stories, triggering alerts, tier-change log) — see summary_context.py.
+        from .summary_context import build_user_summary_context
 
-        # Tier history/Codex-access badge are cheap JSON lookups, independent of
-        # the (heavier, more failure-prone) optimization recommendation build
-        # below -- load them first so they still render even if that build fails.
-        tier_cfg: dict = {}
-        raw_assignments: dict[str, str] = {}
-        tier_histories: dict[str, list[str]] = {}
-        codex_access_map: dict[str, bool] = {}
-        tier_history_key = (email or "").strip().lower()
-
-        def _resolve_tier_history(key: str) -> None:
-            nonlocal optimization_tier_history, optimization_tier_moves, has_codex_access
-            from app.optimization.service import is_codex_access_tier
-
-            optimization_tier_history = tier_histories.get(key, [])
-            has_codex_access = codex_access_map.get(key, False) or is_codex_access_tier(
-                raw_assignments.get(key, "")
-            )
-            if len(optimization_tier_history) > 1:
-                optimization_tier_moves = [
-                    {
-                        "previous_tier": optimization_tier_history[idx - 1],
-                        "new_tier": optimization_tier_history[idx],
-                        "is_current": idx == len(optimization_tier_history) - 1,
-                    }
-                    for idx in range(1, len(optimization_tier_history))
-                    if optimization_tier_history[idx - 1] != optimization_tier_history[idx]
-                ]
-            else:
-                optimization_tier_moves = []
-
-        try:
-            tier_cfg = config_svc.load_tiers()
-            raw_assignments = config_svc.load_user_tiers()
-            tier_histories = config_svc.load_user_tier_history()
-            codex_access_map = config_svc.load_user_codex_access()
-            if tier_history_key:
-                _resolve_tier_history(tier_history_key)
-        except Exception:
-            optimization_tier_history = []
-            optimization_tier_moves = []
-            has_codex_access = False
-
-        try:
-            from app.optimization.service import (
-                build_optimization_result,
-                resolve_governance_assignments,
-                tier_caps,
-            )
-
-            # Codex groups are product access, not credit tiers — resolve them out
-            # of governance so a user's real credit tier drives the recommendation.
-            governance_assignments = resolve_governance_assignments(
-                raw_assignments, tier_histories, tier_caps(tier_cfg)
-            )
-            opt = build_optimization_result(d.df, tier_cfg, governance_assignments)
-            optimization_source = opt.source_label
-            optimization_assigned_tier_count = len(raw_assignments)
-            rec = opt.recommendations
-            if rec is not None and not rec.empty:
-                if email and "email" in rec.columns:
-                    matches = rec[rec["email"].astype(str).str.lower() == email.lower()]
-                elif name and "latest_name" in rec.columns:
-                    matches = rec[rec["latest_name"].astype(str).str.contains(name, case=False, na=False, regex=False)]
-                else:
-                    matches = pd.DataFrame()
-                if not matches.empty:
-                    optimization_user = matches.iloc[0].fillna("").to_dict()
-
-            if not tier_history_key and optimization_user:
-                tier_history_key = str(optimization_user.get("email", "")).strip().lower()
-                if tier_history_key:
-                    _resolve_tier_history(tier_history_key)
-
-            hist = opt.user_week_history
-            if hist is not None and not hist.empty:
-                if email and "email" in hist.columns:
-                    hist = hist[hist["email"].astype(str).str.lower() == email.lower()]
-                elif name and "latest_name" in hist.columns:
-                    hist = hist[hist["latest_name"].astype(str).str.contains(name, case=False, na=False, regex=False)]
-                else:
-                    hist = pd.DataFrame()
-                if not hist.empty:
-                    optimization_history = (
-                        hist.sort_values("week_start", ascending=False)
-                        .head(12)
-                        .fillna("")
-                        .to_dict(orient="records")
-                    )
-        except Exception:
-            optimization_user = None
-            optimization_history = []
-            optimization_source = ""
-            optimization_assigned_tier_count = 0
+        user_ctx = build_user_summary_context(services, d.df, user_scope_df, email, name)
         optimization_page_available = "optimization.optimization_page" in current_app.view_functions
-
-        # Narrative "stories" for this user (month-to-date pace, cross-tool usage).
-        user_stories: list[dict] = []
-        user_month_history: list[dict] = []
-        user_triggered_alerts: list[dict] = []
-        cap_change_date = ""
-        try:
-            from app.analytics.stories import build_month_pace_history, build_user_stories, evaluate_story_rules
-            from app.shared.alerts import evaluate_rules
-
-            tcfg = config_svc.load_tiers()
-            cap_change_date = str(tcfg.get("cap_period_change_date", "") or "")
-            user_tier = "Baseline"
-            if optimization_user:
-                user_tier = str(optimization_user.get("latest_governance_tier") or "Baseline")
-            # Reference "now" for recency = the most recent date across all data.
-            reference_date = None
-            if "date_partition" in d.df.columns:
-                reference_date = pd.to_datetime(d.df["date_partition"], errors="coerce").max()
-            user_stories = build_user_stories(
-                user_scope_df, tcfg, user_tier, reference_date=reference_date
-            )
-            user_month_history = build_month_pace_history(user_scope_df, tcfg, user_tier)
-
-            # This user's currently-triggering alerts (custom rules + story rules),
-            # evaluated against just their own activity, so the conditions shown
-            # are actually about them (not an org-wide rule that happens to fire).
-            if email:
-                key = email.strip().lower()
-                from app.optimization.service import tier_monthly_caps
-
-                mcaps = tier_monthly_caps(tcfg)
-                monthly_cap = mcaps.get(user_tier, mcaps.get("Baseline", 400.0))
-                user_triggered_alerts += evaluate_rules(user_scope_df, config_svc.load_alert_rules())
-                story_rules_for_user = [
-                    r for r in config_svc.load_story_alert_rules()
-                    if not str(r.get("email", "")).strip()
-                    or str(r.get("email", "")).strip().lower() == key
-                ]
-                user_triggered_alerts += evaluate_story_rules(
-                    user_scope_df, story_rules_for_user, {key: monthly_cap}, monthly_cap, reference_date,
-                )
-        except Exception:
-            user_stories = []
-            user_month_history = []
-            user_triggered_alerts = []
-
-        user_tier_changes = []
-        try:
-            # Stored oldest-first (append-only), so keep that order here too --
-            # e.g. One K then Advanced, even when the date is "N/A".
-            user_tier_changes = list(
-                config_svc.load_tier_change_log().get((email or "").strip().lower(), [])
-            )
-        except Exception:
-            user_tier_changes = []
 
         return render_template(
             "user_summary.html",
@@ -616,21 +451,10 @@ def create_analytics_blueprint(services) -> Blueprint:
             user_weekly_json=user_weekly_json,
             user_usage_type_weekly=usage_type_weekly_json(df),
             type_chart_json=type_chart_json,
-            optimization_user=optimization_user,
-            optimization_history=optimization_history,
-            optimization_tier_history=optimization_tier_history,
-            optimization_tier_moves=optimization_tier_moves,
-            optimization_source=optimization_source,
-            optimization_assigned_tier_count=optimization_assigned_tier_count,
             optimization_page_available=optimization_page_available,
             tier_editing_locked=config_svc.is_tier_editing_locked(),
-            has_codex_access=has_codex_access,
-            user_stories=user_stories,
-            user_month_history=user_month_history,
-            user_triggered_alerts=user_triggered_alerts,
-            user_tier_changes=user_tier_changes,
-            cap_change_date=cap_change_date,
             user_notes=config_svc.load_user_notes().get((email or "").strip().lower(), []),
+            **user_ctx,
         )
 
     @bp.route("/user-summary/note", methods=["POST"])
@@ -664,6 +488,45 @@ def create_analytics_blueprint(services) -> Blueprint:
         config_svc.delete_user_note(email, request.form.get("note_id", ""))
         flash("Note removed.", "success")
         return redirect(url_for("analytics.user_summary", email=email))
+
+    @bp.route("/story-matches", methods=["GET"])
+    def story_matches() -> str:
+        """Everyone who triggered a story metric — the click-through target for
+        org-wide story alerts like 'N users burned a monthly cap in 30 days'."""
+        from app.analytics.stories import STORY_ALERT_METRICS, story_metric_matches
+
+        d = data()
+        metric = request.args.get("metric", "burst_cap").strip()
+        if metric not in STORY_ALERT_METRICS:
+            metric = "burst_cap"
+        try:
+            days = max(int(request.args.get("days", 30) or 30), 1)
+        except (TypeError, ValueError):
+            days = 30
+
+        gov = services.governance
+        cap_by_email, default_cap = gov.monthly_cap_by_email()
+        reference_date = None
+        if "date_partition" in d.df.columns:
+            reference_date = pd.to_datetime(d.df["date_partition"], errors="coerce").max()
+
+        matches = story_metric_matches(
+            d.df, metric, days, cap_by_email, default_cap, reference_date,
+            cap_change_date=gov.tier_config().get("cap_period_change_date"),
+        )
+        tiers = gov.resolved_assignments()
+        for m in matches:
+            m["tier"] = tiers.get(m["email"], "Baseline")
+
+        return render_template(
+            "story_matches.html",
+            metric=metric,
+            metric_label=STORY_ALERT_METRICS[metric],
+            metric_options=STORY_ALERT_METRICS,
+            days=days,
+            matches=matches,
+            reference_date=str(reference_date.date()) if reference_date is not None and not pd.isna(reference_date) else "",
+        )
 
     @bp.route("/user-cards", methods=["GET"])
     def user_cards_page() -> str:

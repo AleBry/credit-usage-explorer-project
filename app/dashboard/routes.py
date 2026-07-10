@@ -39,16 +39,6 @@ def create_dashboard_blueprint(services) -> Blueprint:
     def data() -> CreditUsageData:
         return store.data
 
-    def _governance_tier_map() -> dict[str, str]:
-        """email(lowercased) -> resolved governance tier, same resolution
-        Optimization uses (Codex resolved out, unless it's a user's only tier)."""
-        from app.optimization.service import resolve_governance_assignments, tier_caps
-
-        tier_cfg = config_svc.load_tiers()
-        raw_assignments = config_svc.load_user_tiers()
-        tier_histories = config_svc.load_user_tier_history()
-        return resolve_governance_assignments(raw_assignments, tier_histories, tier_caps(tier_cfg))
-
     def _records_query_state(d: CreditUsageData):
         search_field = request.args.get("search_field", "any")
         search_query = request.args.get("search_query", "").strip()
@@ -88,8 +78,7 @@ def create_dashboard_blueprint(services) -> Blueprint:
         df = d.filter_by_date(df, start_date, end_date)
         df = d.filter_by_credits(df, min_credits, max_credits, zero_credits)
         if "email" in df.columns:
-            governance = _governance_tier_map()
-            df["tier"] = df["email"].astype(str).str.strip().str.lower().map(governance).fillna("Baseline")
+            df["tier"] = services.governance.tier_column(df)
         # Usage-type filter runs on the corrected parsed type, so "codex" also
         # catches API rows that arrive labeled as chat.
         if usage_type and "usage_type_parsed_type" in df.columns:
@@ -244,11 +233,7 @@ def create_dashboard_blueprint(services) -> Blueprint:
         # Tier options reflect every tier actually in use across the whole
         # dataset (not just the currently filtered rows), same as usage
         # type/model above.
-        tier_options: list[str] = []
-        if "email" in d.df.columns:
-            governance = _governance_tier_map()
-            all_tiers = d.df["email"].astype(str).str.strip().str.lower().map(governance).fillna("Baseline")
-            tier_options = sorted(all_tiers.unique().tolist())
+        tier_options = services.governance.tier_options(d.df)
 
         return render_template(
             "index.html",

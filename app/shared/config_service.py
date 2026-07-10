@@ -91,14 +91,65 @@ class AppConfig:
         with open(self.contract_path, "w", encoding="utf-8") as f:
             yaml.dump(data, f, default_flow_style=False, allow_unicode=True)
 
+    # Tier config is round-tripped with ruamel.yaml so the hand-written
+    # annotations (e.g. "# monthly; ~400/week") survive every Settings save.
+    # pyyaml remains the fallback if ruamel isn't installed.
+    @staticmethod
+    def _ruamel():
+        try:
+            from ruamel.yaml import YAML
+
+            yml = YAML(typ="rt")
+            yml.preserve_quotes = True
+            yml.width = 4096
+            return yml
+        except Exception:
+            return None
+
+    @staticmethod
+    def _merge_into_commented(target, data: dict) -> None:
+        """Recursively apply `data` onto a ruamel CommentedMap in place, so
+        untouched keys keep their comments. Keys absent from `data` are removed
+        (matches plain-dump semantics where the new dict is the whole truth)."""
+        for key in [k for k in target.keys() if k not in data]:
+            del target[key]
+        for key, value in data.items():
+            if key in target and isinstance(target[key], dict) and isinstance(value, dict):
+                AppConfig._merge_into_commented(target[key], value)
+            else:
+                target[key] = value
+
     def load_tiers(self) -> dict:
         if not self.tier_path.exists():
             return {"tiers": {}}
+        yml = self._ruamel()
         with open(self.tier_path, "r", encoding="utf-8") as f:
+            if yml is not None:
+                return yml.load(f) or {"tiers": {}}
             return yaml.safe_load(f) or {"tiers": {}}
 
     def save_tiers(self, data: dict) -> None:
         self.config_dir.mkdir(parents=True, exist_ok=True)
+        yml = self._ruamel()
+        if yml is not None:
+            try:
+                from ruamel.yaml.comments import CommentedMap
+
+                if isinstance(data, CommentedMap):
+                    doc = data
+                elif self.tier_path.exists():
+                    # Plain dict from a caller that built config from scratch:
+                    # graft it onto the commented on-disk doc to keep comments.
+                    with open(self.tier_path, "r", encoding="utf-8") as f:
+                        doc = yml.load(f) or CommentedMap()
+                    self._merge_into_commented(doc, data)
+                else:
+                    doc = data
+                with open(self.tier_path, "w", encoding="utf-8") as f:
+                    yml.dump(doc, f)
+                return
+            except Exception:
+                pass  # fall through to plain dump rather than lose the save
         with open(self.tier_path, "w", encoding="utf-8") as f:
             yaml.dump(data, f, default_flow_style=False, allow_unicode=True)
 

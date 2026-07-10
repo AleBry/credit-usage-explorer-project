@@ -928,6 +928,7 @@
     "granularity": "{{ granularity }}",
     "weeklyChartData": {{ weekly_chart_data | safe }},
     "dailyActualData": {{ daily_actual_data | safe }},
+    "creditEvents": {{ credit_events | default('[]') | safe }},
     "activeUsers": {{ active_users_data | safe }},
     "cumulative": {{ cumulative_chart_data | safe }},
     "usageType": {{ usage_type_weekly | safe }},

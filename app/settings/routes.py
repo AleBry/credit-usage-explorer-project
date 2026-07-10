@@ -208,7 +208,12 @@ def create_settings_blueprint(services) -> Blueprint:
                     tiers_dict[name] = {"credit_cap": int(float(cap))}
             # Preserve non-tier settings (e.g. the editing lock) already on file.
             cfg = config_svc.load_tiers()
-            cfg["tiers"] = tiers_dict
+            # Merge instead of replace so per-tier YAML comments survive the save.
+            existing_tiers = cfg.get("tiers")
+            if isinstance(existing_tiers, dict):
+                config_svc._merge_into_commented(existing_tiers, tiers_dict)
+            else:
+                cfg["tiers"] = tiers_dict
             # How the caps above are interpreted: weekly or monthly (mutable).
             period = str(request.form.get("cap_period", "weekly")).strip().lower()
             cfg["cap_period"] = "monthly" if period == "monthly" else "weekly"

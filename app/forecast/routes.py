@@ -34,8 +34,38 @@ def create_forecast_blueprint(services) -> Blueprint:
                 candidates.append(dates.max().normalize())
         return max(candidates) if candidates else _pd.Timestamp("today").normalize()
 
+    def _credit_events(contract_start) -> list[dict]:
+        """Credit-ledger entries as chart events, each clamped to contract start.
+
+        effective_date is when the entry starts counting toward "available";
+        undated or pre-contract entries count from contract start."""
+        from app.shared.credit_ledger import credit_kind_label, normalize_credit_entries
+
+        entries = normalize_credit_entries(config_svc.load_contract().get("contract", {}))
+        start = _pd.to_datetime(contract_start, errors="coerce")
+        events = []
+        for e in entries:
+            dt = _pd.to_datetime(e.get("date"), errors="coerce")
+            if _pd.isna(dt) or (not _pd.isna(start) and dt < start):
+                dt = start
+            if _pd.isna(dt):
+                continue
+            events.append({
+                "date": str(e.get("date") or ""),
+                "effective_date": str(dt.date()),
+                "credits": float(e.get("credits") or 0),
+                "kind": str(e.get("kind") or "purchased"),
+                "label": f"+{float(e.get('credits') or 0):,.0f} {credit_kind_label(e.get('kind'))}",
+                "notes": str(e.get("notes") or ""),
+            })
+        return events
+
     def _daily_actual_burndown_json(df, contract_status: dict | None) -> str:
-        """Daily actual remaining points for the burndown chart."""
+        """Daily actual remaining points for the burndown chart.
+
+        Remaining honors the credit ledger: each purchased/gifted entry only
+        counts from its recorded date, so a mid-contract grant appears as a
+        step up on that day instead of inflating the whole history."""
         if df is None or df.empty or "date_partition" not in df.columns or "usage_credits" not in df.columns:
             return "[]"
         if not contract_status:
@@ -58,7 +88,12 @@ def create_forecast_blueprint(services) -> Blueprint:
         daily = ddf.groupby("_day", as_index=False)["usage_credits"].sum()
         full_days = _pd.DataFrame({"_day": _pd.date_range(start.normalize(), end.normalize(), freq="D")})
         daily = full_days.merge(daily, on="_day", how="left").fillna({"usage_credits": 0.0})
-        daily["remaining"] = (purchased - daily["usage_credits"].cumsum()).clip(lower=0.0)
+        # Credits available as of each day = sum of ledger entries dated <= day.
+        available = _pd.Series(0.0, index=daily.index)
+        for ev in _credit_events(contract_status.get("contract_start_date")):
+            ev_day = _pd.to_datetime(ev["effective_date"])
+            available = available + (daily["_day"] >= ev_day) * ev["credits"]
+        daily["remaining"] = (available - daily["usage_credits"].cumsum()).clip(lower=0.0)
         rows = [
             {"date": str(row["_day"].date()), "remaining": round(float(row["remaining"]), 2)}
             for _, row in daily.iterrows()
@@ -160,6 +195,7 @@ def create_forecast_blueprint(services) -> Blueprint:
                 forecast=None,
                 weekly_chart_data="[]",
                 daily_actual_data="[]",
+                credit_events="[]",
                 cumulative_chart_data="[]",
                 active_users_data="[]",
                 usage_type_weekly=usage_type_weekly,
@@ -183,6 +219,7 @@ def create_forecast_blueprint(services) -> Blueprint:
         chart_builder = ChartDataBuilder(forecasting, forecasting.historical_df, forecasting.operational_df)
         weekly_chart_data = chart_builder.weekly_burn_json()
         daily_actual_data = _daily_actual_burndown_json(daily_fallback_df, contract_status)
+        credit_events = json.dumps(_credit_events(contract_status.get("contract_start_date")))
         cumulative_chart_data = chart_builder.cumulative_burn_json()
         contract_start_str = str(contract_status.get("contract_start_date", ""))
         active_users_data = chart_builder.active_users_json(contract_start_str)
@@ -195,6 +232,7 @@ def create_forecast_blueprint(services) -> Blueprint:
             forecast=forecast_data,
             weekly_chart_data=weekly_chart_data,
             daily_actual_data=daily_actual_data,
+            credit_events=credit_events,
             cumulative_chart_data=cumulative_chart_data,
             active_users_data=active_users_data,
             usage_type_weekly=usage_type_weekly,

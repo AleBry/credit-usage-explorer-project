@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block title %}Story Matches - Credit Usage Explorer{% endblock %}
+
+{% block body %}
+    <div class="container py-4" style="max-width: 1100px;">
+
+      <div class="mb-4">
+        <h1 class="page-title">Story Matches</h1>
+        <p class="page-subtitle">Every user who triggered this story condition{% if reference_date %} (data through {{ reference_date }}){% endif %}.</p>
+      </div>
+
+      <form method="get" action="{{ url_for('analytics.story_matches') }}" class="filter-card mb-3">
+        <div class="row g-2 align-items-end">
+          <div class="col-md-5">
+            <label class="form-label">Story condition</label>
+            <select class="form-select form-select-sm" name="metric" onchange="this.form.submit()">
+              {% for key, label in metric_options.items() %}
+              <option value="{{ key }}" {% if metric == key %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-2">
+            <label class="form-label">Days (N)</label>
+            <input class="form-control form-control-sm" type="number" name="days" value="{{ days }}" min="1" max="365">
+          </div>
+          <div class="col-md-2">
+            <button class="btn btn-primary btn-sm w-100">Apply</button>
+          </div>
+        </div>
+      </form>
+
+      <div class="section-card">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h5 class="mb-0">{{ metric_label }}</h5>
+          <span class="badge bg-secondary">{{ '{:,}'.format(matches | length) }} user{{ '' if matches | length == 1 else 's' }}</span>
+        </div>
+
+        <div class="table-responsive" style="max-height:75vh; overflow:auto;">
+          <table class="table table-sm table-hover records-table mb-0">
+            <thead>
+              <tr>
+                <th data-col="user" onclick="sortByCol(this)">User <span class="sort-indicator"></span></th>
+                <th data-col="tier" onclick="sortByCol(this)">Tier <span class="sort-indicator"></span></th>
+                {% if metric == 'burst_cap' %}
+                <th class="text-end" data-col="peak" onclick="sortByCol(this)">Peak {{ days }}-day spend <span class="sort-indicator"></span></th>
+                <th class="text-end" data-col="cap" onclick="sortByCol(this)">Month's allowance <span class="sort-indicator"></span></th>
+                <th class="text-end" data-col="pct" onclick="sortByCol(this)">% of allowance <span class="sort-indicator"></span></th>
+                <th data-col="window" onclick="sortByCol(this)">Window ended <span class="sort-indicator"></span></th>
+                <th data-col="regime" onclick="sortByCol(this)" title="Whether that window happened before (weekly caps) or after (monthly cap) the cap-period switch">Cap regime <span class="sort-indicator"></span></th>
+                {% elif metric == 'inactive' %}
+                <th class="text-end" data-col="gap" onclick="sortByCol(this)">Days inactive <span class="sort-indicator"></span></th>
+                <th data-col="last" onclick="sortByCol(this)">Last active <span class="sort-indicator"></span></th>
+                {% elif metric == 'pro_codex' %}
+                <th class="text-end" data-col="times" onclick="sortByCol(this)">Same-day Pro+Codex days <span class="sort-indicator"></span></th>
+                <th data-col="last" onclick="sortByCol(this)">Most recent <span class="sort-indicator"></span></th>
+                {% endif %}
+              </tr>
+            </thead>
+            <tbody>
+              {% for m in matches %}
+              <tr>
+                <td>
+                  <a class="fw-semibold text-decoration-none"
+                     href="{{ url_for('analytics.user_summary', email=m.email, active_tab='stories') }}">{{ m.name or m.email }}</a>
+                  <div class="text-muted small">{{ m.email }}</div>
+                </td>
+                <td>{{ m.tier }}</td>
+                {% if metric == 'burst_cap' %}
+                <td class="text-end tnum">{{ '{:,.0f}'.format(m.peak_spend) }}</td>
+                <td class="text-end tnum">{{ '{:,.0f}'.format(m.monthly_cap) }}</td>
+                <td class="text-end tnum">{{ '{:.0%}'.format(m.pct_of_cap) }}</td>
+                <td>{{ m.window_end }}</td>
+                <td>{% if m.cap_regime == 'weekly' %}<span class="badge bg-light text-dark border" title="This window ended before the weekly-to-monthly cap switch; the allowance shown is a month's worth of the weekly caps in force then.">Weekly caps</span>{% else %}Monthly cap{% endif %}</td>
+                {% elif metric == 'inactive' %}
+                <td class="text-end tnum">{{ m.days_inactive }}</td>
+                <td>{{ m.last_active }}</td>
+                {% elif metric == 'pro_codex' %}
+                <td class="text-end tnum">{{ m.times }}</td>
+                <td>{{ m.last_date }}</td>
+                {% endif %}
+              </tr>
+              {% else %}
+              <tr><td colspan="7" class="text-center text-muted py-4">No users match this condition.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/table_sort.js') }}"></script>
+<script>
+  initTableSort({ formId: null, initialCol: '', initialOrder: 'asc' });
+</script>
+{% endblock %}

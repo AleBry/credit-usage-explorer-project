@@ -33,6 +33,14 @@ class Services:
         """The currently loaded usage dataframe."""
         return self.store.data.df
 
+    @property
+    def governance(self):
+        """A fresh per-request GovernanceService (memoizes within itself, so
+        grab it once per request and reuse; the next request sees fresh config)."""
+        from .governance import GovernanceService
+
+        return GovernanceService(self.config_svc)
+
     def build_forecasting_service(
         self, config: dict | None = None, *, daily_fallback: bool = True
     ) -> "ForecastingService":

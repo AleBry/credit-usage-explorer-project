@@ -296,15 +296,123 @@ STORY_ALERT_METRICS = {
 }
 
 
-def _story_alert(rid: str, level: str, title: str, detail: str, email: str | None) -> dict:
+def _story_alert(
+    rid: str, level: str, title: str, detail: str, email: str | None,
+    metric: str = "", days: int = 0,
+) -> dict:
+    if email:
+        link_endpoint, link_args = "analytics.user_summary", {"email": email}
+    elif metric:
+        # Org-wide alert: deep-link to the list of exactly who triggered it.
+        link_endpoint, link_args = "analytics.story_matches", {"metric": metric, "days": days}
+    else:
+        link_endpoint, link_args = "analytics.user_cards_page", {}
     return {
         "id": f"story:{rid}",
         "level": level,
         "title": title,
         "detail": detail,
-        "link_endpoint": "analytics.user_summary" if email else "analytics.user_cards_page",
-        "link_args": {"email": email} if email else {},
+        "link_endpoint": link_endpoint,
+        "link_args": link_args,
     }
+
+
+def story_metric_matches(
+    df: pd.DataFrame,
+    metric: str,
+    days: int,
+    monthly_cap_by_email: dict | None = None,
+    default_monthly_cap: float = 400.0,
+    reference_date: object = None,
+    cap_change_date: object = None,
+) -> list[dict]:
+    """Per-user match rows for one story metric — who triggered it and why.
+
+    Returns one dict per matching user, with metric-specific fields, so both
+    the alert evaluation (counts) and the drill-down page (the actual list)
+    share a single implementation of each condition.
+    """
+    if df is None or df.empty:
+        return []
+    if not {"date_partition", "usage_credits", "email"}.issubset(df.columns):
+        return []
+    days = max(int(days or 30), 1)
+
+    d = df.copy()
+    d["_date"] = pd.to_datetime(d["date_partition"], errors="coerce")
+    d = d.dropna(subset=["_date"])
+    if d.empty:
+        return []
+    d["_credits"] = pd.to_numeric(d["usage_credits"], errors="coerce").fillna(0.0)
+    d["_email"] = d["email"].astype(str).str.strip().str.lower()
+    ref = pd.Timestamp(reference_date).normalize() if reference_date is not None \
+        and not pd.isna(reference_date) else d["_date"].max().normalize()
+    caps = monthly_cap_by_email or {}
+    names = (
+        d.groupby("_email")["name"].last().to_dict()
+        if "name" in d.columns else {}
+    )
+
+    matches: list[dict] = []
+    if metric == "inactive":
+        last_by = d.groupby("_email")["_date"].max().dt.normalize()
+        gap = (ref - last_by).dt.days
+        for em, g in gap[gap >= days].sort_values(ascending=False).items():
+            matches.append({
+                "email": em,
+                "name": names.get(em, ""),
+                "last_active": str(last_by[em].date()),
+                "days_inactive": int(g),
+            })
+
+    elif metric == "burst_cap":
+        # Windows that ended before the weekly->monthly switch happened under
+        # the weekly-cap regime: the allowance quantity is the same (a month's
+        # worth), but calling it "monthly cap" there is anachronistic — flag
+        # the regime so alerts and the drill-down can say it honestly.
+        change = pd.to_datetime(cap_change_date, errors="coerce")
+        for em, g in d.groupby("_email"):
+            daily = g.groupby(g["_date"].dt.normalize())["_credits"].sum().sort_index()
+            if daily.empty:
+                continue
+            rolled = daily.rolling(f"{days}D").sum()
+            peak = float(rolled.max())
+            cap = float(caps.get(em, default_monthly_cap))
+            if cap > 0 and peak >= cap:
+                window_end = rolled.idxmax()
+                weekly_era = not pd.isna(change) and window_end < change
+                matches.append({
+                    "email": em,
+                    "name": names.get(em, ""),
+                    "peak_spend": round(peak, 2),
+                    "monthly_cap": round(cap, 2),
+                    "pct_of_cap": round(peak / cap, 4),
+                    "window_end": str(window_end.date()),
+                    "cap_regime": "weekly" if weekly_era else "monthly",
+                })
+        matches.sort(key=lambda m: m["pct_of_cap"], reverse=True)
+
+    elif metric == "pro_codex":
+        cutoff = ref - pd.Timedelta(days=days - 1)
+        w = d[d["_date"] >= cutoff]
+        if not w.empty:
+            is_pro = w["usage_type"].astype(str).str.contains("pro", case=False, na=False) \
+                if "usage_type" in w.columns else pd.Series(False, index=w.index)
+            is_cx = w["usage_type_parsed_type"].astype(str).str.lower().eq("codex") \
+                if "usage_type_parsed_type" in w.columns else pd.Series(False, index=w.index)
+            ww = w.assign(_d=w["_date"].dt.normalize(), _pro=is_pro, _cx=is_cx)
+            by = ww.groupby(["_email", "_d"]).agg(pro=("_pro", "any"), cx=("_cx", "any"))
+            both = by[by["pro"] & by["cx"]].reset_index()
+            for em, g in both.groupby("_email"):
+                matches.append({
+                    "email": em,
+                    "name": names.get(em, ""),
+                    "times": int(len(g)),
+                    "last_date": str(g["_d"].max().date()),
+                })
+            matches.sort(key=lambda m: m["times"], reverse=True)
+
+    return matches
 
 
 def evaluate_story_rules(
@@ -313,6 +421,7 @@ def evaluate_story_rules(
     monthly_cap_by_email: dict | None = None,
     default_monthly_cap: float = 400.0,
     reference_date: object = None,
+    cap_change_date: object = None,
 ) -> list[dict]:
     """Turn story-based alert rules into nav-bell alert dicts.
 
@@ -322,19 +431,6 @@ def evaluate_story_rules(
     out: list[dict] = []
     if df is None or df.empty:
         return out
-    if not {"date_partition", "usage_credits", "email"}.issubset(df.columns):
-        return out
-
-    d = df.copy()
-    d["_date"] = pd.to_datetime(d["date_partition"], errors="coerce")
-    d = d.dropna(subset=["_date"])
-    if d.empty:
-        return out
-    d["_credits"] = pd.to_numeric(d["usage_credits"], errors="coerce").fillna(0.0)
-    d["_email"] = d["email"].astype(str).str.strip().str.lower()
-    ref = pd.Timestamp(reference_date).normalize() if reference_date is not None \
-        and not pd.isna(reference_date) else d["_date"].max().normalize()
-    caps = monthly_cap_by_email or {}
 
     for rule in rules:
         if not rule.get("enabled", True):
@@ -344,60 +440,53 @@ def evaluate_story_rules(
         rid = rule.get("id", "story")
         target = str(rule.get("email", "") or "").strip().lower()
         days = max(int(rule.get("days", 30) or 30), 1)
-        sub = d[d["_email"] == target] if target else d
-        if sub.empty:
+
+        matches = story_metric_matches(
+            df, metric, days, monthly_cap_by_email, default_monthly_cap, reference_date,
+            cap_change_date=cap_change_date,
+        )
+        if target:
+            matches = [m for m in matches if m["email"] == target]
+        if not matches:
             continue
 
         if metric == "inactive":
-            last_by = sub.groupby("_email")["_date"].max().dt.normalize()
-            gap = (ref - last_by).dt.days
-            stale = gap[gap >= days]
-            if target and not stale.empty:
+            if target:
+                m = matches[0]
                 out.append(_story_alert(rid, "warning", name,
-                    f"{target} has no activity in {int(stale.iloc[0])} days "
-                    f"(last {last_by.iloc[0].date()}).", target))
-            elif not target and int(stale.shape[0]):
+                    f"{target} has no activity in {m['days_inactive']} days "
+                    f"(last {m['last_active']}).", target))
+            else:
                 out.append(_story_alert(rid, "info", name,
-                    f"{int(stale.shape[0]):,} user(s) inactive {days}+ days.", None))
+                    f"{len(matches):,} user(s) inactive {days}+ days.", None,
+                    metric=metric, days=days))
 
         elif metric == "burst_cap":
-            hits = []
-            for em, g in sub.groupby("_email"):
-                daily = g.groupby(g["_date"].dt.normalize())["_credits"].sum().sort_index()
-                if daily.empty:
-                    continue
-                peak = float(daily.rolling(f"{days}D").sum().max())
-                cap = float(caps.get(em, default_monthly_cap))
-                if cap > 0 and peak >= cap:
-                    hits.append((em, peak, cap))
-            if target and hits:
-                em, peak, cap = hits[0]
+            if target:
+                m = matches[0]
+                cap_word = ("a month's worth of weekly caps"
+                            if m.get("cap_regime") == "weekly" else "monthly cap")
                 out.append(_story_alert(rid, "warning", name,
-                    f"{em} spent {peak:,.0f} cr (>= {cap:,.0f} monthly cap) within {days} days.", em))
-            elif not target and hits:
+                    f"{target} spent {m['peak_spend']:,.0f} cr "
+                    f"(>= {m['monthly_cap']:,.0f} = {cap_word}) within {days} days "
+                    f"(window ended {m['window_end']}).", target))
+            else:
+                weekly_era = sum(1 for m in matches if m.get("cap_regime") == "weekly")
+                note = (f" ({weekly_era} of them before the monthly-cap switch, under weekly caps)"
+                        if weekly_era else "")
                 out.append(_story_alert(rid, "warning", name,
-                    f"{len(hits):,} user(s) burned a full monthly cap within {days} days.", None))
+                    f"{len(matches):,} user(s) burned a month's worth of cap within {days} days{note}.", None,
+                    metric=metric, days=days))
 
         elif metric == "pro_codex":
-            cutoff = ref - pd.Timedelta(days=days - 1)
-            w = sub[sub["_date"] >= cutoff]
-            if w.empty:
-                continue
-            is_pro = w["usage_type"].astype(str).str.contains("pro", case=False, na=False) \
-                if "usage_type" in w.columns else pd.Series(False, index=w.index)
-            is_cx = w["usage_type_parsed_type"].astype(str).str.lower().eq("codex") \
-                if "usage_type_parsed_type" in w.columns else pd.Series(False, index=w.index)
-            ww = w.assign(_d=w["_date"].dt.normalize(), _pro=is_pro, _cx=is_cx)
-            by = ww.groupby(["_email", "_d"]).agg(pro=("_pro", "any"), cx=("_cx", "any"))
-            both = by[by["pro"] & by["cx"]]
-            users = both.reset_index()["_email"].nunique()
-            if target and users:
-                n = int(both.reset_index()["_email"].eq(target).sum())
+            if target:
+                m = matches[0]
                 out.append(_story_alert(rid, "info", name,
-                    f"{target} used Pro + Codex on the same day {n} time(s) in {days} days.", target))
-            elif not target and users:
+                    f"{target} used Pro + Codex on the same day {m['times']} time(s) in {days} days.", target))
+            else:
                 out.append(_story_alert(rid, "info", name,
-                    f"{int(users):,} user(s) used Pro + Codex the same day within {days} days.", None))
+                    f"{len(matches):,} user(s) used Pro + Codex the same day within {days} days.", None,
+                    metric=metric, days=days))
     return out
 
 
