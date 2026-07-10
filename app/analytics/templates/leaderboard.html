@@ -103,10 +103,9 @@
 
         <a href="?{{ base_query }}{% if base_query %}&{% endif %}active_tab=daily"
            class="tier-tab {% if active_tab == 'daily' %}active{% endif %}">Daily</a>
-      </div>
 
-      <div class="view-toolbar justify-content-end">
-        <a class="btn btn-outline-success btn-sm"
+        <a class="btn btn-outline-success btn-sm py-0 px-2 ms-auto align-self-center"
+           style="font-size:.74rem;"
            href="{{ url_for('analytics.leaderboard_export_csv') }}?{{ base_query }}{% if base_query %}&{% endif %}active_tab={{ active_tab }}">
           Export CSV
         </a>
