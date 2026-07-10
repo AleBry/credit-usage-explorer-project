@@ -642,6 +642,11 @@
           <span>Legend on chart</span>
         </label>
 
+        <label class="fc-check fc-toggle-chip mb-0" title="Vertical markers where purchased or gifted credits were added mid-contract.">
+          <input type="checkbox" id="credit-markers-on" checked onchange="toggleCreditMarkers(this.checked)">
+          <span>Credit markers</span>
+        </label>
+
         <div class="d-flex align-items-end flex-wrap gap-1 ms-md-2" style="font-size:.72rem;">
           <span class="fc-control-label align-self-center me-1">X-axis</span>
           <input type="date" id="chart-view-from" class="form-control form-control-sm" style="width:132px;" onchange="applyBurndownViewRange()">

@@ -68,8 +68,11 @@ if (typeof Chart !== 'undefined') {
   window.addEventListener('bnl-theme-change', bnlApplyChartTheme);
 }
 
-// Vertical marker line at a given category label (e.g. the weekly->monthly cap
-// switch week). Set chart.$marker = { week: 'YYYY-MM-DD', label: '...' }.
+// Vertical marker line at a regime boundary (e.g. the weekly->monthly cap
+// switch). Set chart.$marker = { week: 'YYYY-MM-DD', label: '...' }.
+// `week` may be any date: the line lands on the first category label >= it,
+// drawn at that bar's LEFT edge so bars before the line are the old regime
+// and bars from the line on are the new one.
 if (typeof Chart !== 'undefined') {
   Chart.register({
     id: 'bnl-week-marker',
@@ -80,8 +83,14 @@ if (typeof Chart !== 'undefined') {
       let idx = labels.indexOf(m.week);
       if (idx < 0) idx = labels.findIndex(w => String(w) >= m.week);
       if (idx < 0) return;
-      const x = chart.scales.x.getPixelForValue(idx);
-      const { ctx, chartArea: { top, bottom } } = chart;
+      const xScale = chart.scales.x;
+      const { ctx, chartArea: { top, bottom, left, right } } = chart;
+      // Boundary between the previous bar and the switch bar (bar centers are
+      // what getPixelForValue returns on a category scale).
+      const x = idx > 0
+        ? (xScale.getPixelForValue(idx - 1) + xScale.getPixelForValue(idx)) / 2
+        : left;
+      if (!Number.isFinite(x) || x < left - 1 || x > right + 1) return;
       ctx.save();
       ctx.beginPath();
       ctx.moveTo(x, top);
@@ -91,13 +100,33 @@ if (typeof Chart !== 'undefined') {
       ctx.setLineDash([5, 3]);
       ctx.stroke();
       ctx.setLineDash([]);
-      ctx.fillStyle = 'rgba(214,51,132,.95)';
-      ctx.font = '10px sans-serif';
-      ctx.textAlign = 'left';
-      ctx.fillText(m.label || 'monthly caps', x + 4, top + 10);
+      bnlDrawMarkerLabel(ctx, m.label || 'monthly caps', x, top, right, '#d63384');
       ctx.restore();
     },
   });
+}
+
+// Label pill for vertical marker lines. Flips to the left side of the line
+// when the text would clip past the chart's right edge, and sits on a
+// theme-matched backing so it stays readable over bars/lines.
+function bnlDrawMarkerLabel(ctx, text, x, top, right, color, row = 0) {
+  const dark = document.documentElement.getAttribute('data-theme') === 'dark';
+  ctx.font = '10px sans-serif';
+  const w = ctx.measureText(text).width;
+  const pad = 3;
+  const gap = 5;
+  const onRight = x + gap + w + pad * 2 <= right;
+  const tx = onRight ? x + gap : x - gap - w - pad * 2;
+  const ty = top + 4 + row * 15;
+  ctx.fillStyle = dark ? 'rgba(30,33,42,.82)' : 'rgba(255,255,255,.82)';
+  ctx.beginPath();
+  if (ctx.roundRect) ctx.roundRect(tx, ty, w + pad * 2, 13, 3);
+  else ctx.rect(tx, ty, w + pad * 2, 13);
+  ctx.fill();
+  ctx.fillStyle = color;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, tx + pad, ty + 7);
 }
 
 // Shared categorical palette for multi-series charts.

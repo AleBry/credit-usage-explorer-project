@@ -727,7 +727,7 @@ if (typeof Chart !== 'undefined') {
       const events = chart.$creditEvents;
       if (!events || !events.length) return;
       const labels = chart.data.labels || [];
-      const { ctx, chartArea: { top, bottom } } = chart;
+      const { ctx, chartArea: { top, bottom, right } } = chart;
       events.forEach((ev, i) => {
         let idx = labels.indexOf(ev.effective_date);
         if (idx < 0) idx = labels.findIndex(l => String(l) >= ev.effective_date);
@@ -743,10 +743,9 @@ if (typeof Chart !== 'undefined') {
         ctx.setLineDash([2, 3]);
         ctx.stroke();
         ctx.setLineDash([]);
-        ctx.fillStyle = 'rgba(25,135,84,.95)';
-        ctx.font = '10px sans-serif';
-        ctx.textAlign = 'left';
-        ctx.fillText(ev.label || 'credits added', x + 4, top + 12 + i * 12);
+        // Shared pill label from charts.js — flips left of the line near the
+        // chart's right edge; stacked one row per event.
+        bnlDrawMarkerLabel(ctx, ev.label || 'credits added', x, top, right, '#198754', i);
         ctx.restore();
       });
     },
@@ -1089,10 +1088,24 @@ if (typeof Chart !== 'undefined') {
 
   // Show where each ledger entry (purchase / gifted grace credits) lands.
   // The initial purchase at contract start is implicit, so only mark
-  // mid-contract additions.
-  window.burndownChart.chart.$creditEvents = creditEvents.filter(
+  // mid-contract additions. The "Credit markers" toggle below the chart
+  // hides them (persisted per browser, default on).
+  window._fcCreditEvents = creditEvents.filter(
     e => contractStartDate && e.effective_date > contractStartDate
   );
+  const creditMarkersOn = localStorage.getItem('fc-credit-markers') !== '0';
+  window.burndownChart.chart.$creditEvents = creditMarkersOn ? window._fcCreditEvents : [];
+  window.toggleCreditMarkers = function (on) {
+    localStorage.setItem('fc-credit-markers', on ? '1' : '0');
+    const bc = window.burndownChart;
+    if (!bc) return;
+    bc.chart.$creditEvents = on ? (window._fcCreditEvents || []) : [];
+    bc.chart.update('none');
+  };
+  (function () {
+    const cb = document.getElementById('credit-markers-on');
+    if (cb) cb.checked = creditMarkersOn;
+  })();
 
   // On-chart legend (baked into the PNG export). Default off for a clean plot.
   window.toggleChartLegend = function (on) {

@@ -832,17 +832,12 @@
           canvas.style.display = 'none';
           return;
         }
-        // Optional weekly->monthly cap switch marker (Monday of the switch week).
-        const changeDate = "{{ cap_change_date }}";
-        let markerWeek = null;
-        if (changeDate) {
-          const dt = new Date(changeDate + 'T00:00:00');
-          if (!isNaN(dt)) {
-            const dow = (dt.getDay() + 6) % 7;  // Mon=0
-            dt.setDate(dt.getDate() - dow);
-            markerWeek = dt.toISOString().slice(0, 10);
-          }
-        }
+        // Optional weekly->monthly cap switch marker. Pass the change date
+        // as-is: the marker plugin snaps it forward to the first plotted week
+        // with week_start >= change date, which matches the engine — weeks
+        // whose Monday falls before the change date still use the old weekly
+        // caps (see weeks_per_month() in app/optimization/service.py).
+        const markerWeek = "{{ cap_change_date }}" || null;
         window.userWeeklyBNL = renderUsageTypeChart('userWeeklyChart', data,
           { exportName: 'User Credits by Type per Week',
             markerWeek: markerWeek, markerLabel: '→ monthly caps' });
