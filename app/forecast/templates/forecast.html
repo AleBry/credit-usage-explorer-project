@@ -690,6 +690,23 @@
               </div>
             </div>
 
+            <!-- Actual line display -->
+            <div class="fc-advanced-group">
+              <div class="fc-control-label">Actual line</div>
+              <div class="fc-color-panel" style="display:flex; align-items:flex-end; gap:.6rem; flex-wrap:wrap;">
+                <label class="fc-check fc-toggle-chip mb-0" title="Show or hide the actual-remaining line. Display only — forecasts are unaffected.">
+                  <input type="checkbox" id="actual-show" checked onchange="toggleActualLine(this.checked)">
+                  <span>Show line</span>
+                </label>
+                <div>
+                  <label class="form-label mb-1" style="font-size:.7rem;" title="Don't draw actual-remaining points before this date. Display only — forecasts are unaffected.">Hide before</label>
+                  <input type="date" id="actual-cutoff" class="form-control form-control-sm" style="width:150px;"
+                         onchange="applyActualCutoff(this.value)">
+                </div>
+                <button class="btn btn-link btn-sm p-0 text-muted" style="font-size:.72rem;" onclick="clearActualCutoff()">Clear</button>
+              </div>
+            </div>
+
             <!-- Burn window -->
             <div class="fc-advanced-group">
               <div class="fc-control-label">Burn window{% if data_from or data_to %} &middot; active{% endif %}</div>

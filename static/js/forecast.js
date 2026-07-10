@@ -121,7 +121,14 @@ function refreshBurndownLegend() {
                   (typeof d.backgroundColor === 'string' && d.backgroundColor) || '#888';
     lineRows.push(_menuRow(cleanLegendLabel(d.label), color, !hidden, () => {
       const mm = chart.getDatasetMeta(i);
-      mm.hidden = mm.hidden === true ? false : true;
+      const show = mm.hidden === true;
+      // Actual remaining routes through its Advanced-settings toggle so the
+      // checkbox there and the persisted preference stay in sync.
+      if (d.label === 'Actual remaining' && typeof window.toggleActualLine === 'function') {
+        window.toggleActualLine(show);
+        return;
+      }
+      mm.hidden = !show;
       chart.update();
       refreshBurndownLegend();
     }, 'Show / hide'));
@@ -1105,6 +1112,61 @@ if (typeof Chart !== 'undefined') {
   (function () {
     const cb = document.getElementById('credit-markers-on');
     if (cb) cb.checked = creditMarkersOn;
+  })();
+
+  // ── Actual-line display options (Advanced settings) ──
+  // Both are display-only and persisted per browser; the burn-rate math and
+  // every forecast model keep using the full history regardless.
+  const findActualDs = () => window.burndownChart.data.datasets.findIndex(
+    d => d.label === 'Actual remaining'
+  );
+
+  // Trim: don't draw actual points before the chosen date.
+  window.applyActualCutoff = function (dateStr, persist = true) {
+    const bc = window.burndownChart;
+    if (!bc) return;
+    const idx = findActualDs();
+    if (idx < 0) return;
+    const cut = (dateStr || '').trim();
+    if (persist) {
+      if (cut) localStorage.setItem('fc-actual-cutoff', cut);
+      else localStorage.removeItem('fc-actual-cutoff');
+    }
+    bc.data.datasets[idx].data = bc.data.labels.map(
+      l => (cut && l < cut) ? null : lookup(activeActualPts(), l)
+    );
+    bc.chart.update();
+  };
+  window.clearActualCutoff = function () {
+    const el = document.getElementById('actual-cutoff');
+    if (el) el.value = '';
+    window.applyActualCutoff('');
+  };
+
+  // Hide the whole line. Sets dataset.hidden too so the fullscreen copy
+  // (which clones data, not runtime meta) matches what's on screen.
+  window.toggleActualLine = function (show, persist = true) {
+    const bc = window.burndownChart;
+    if (!bc) return;
+    const idx = findActualDs();
+    if (idx < 0) return;
+    bc.data.datasets[idx].hidden = !show;
+    bc.chart.getDatasetMeta(idx).hidden = !show;
+    if (persist) localStorage.setItem('fc-actual-hidden', show ? '0' : '1');
+    const cb = document.getElementById('actual-show');
+    if (cb) cb.checked = !!show;
+    bc.chart.update();
+    refreshBurndownLegend();
+  };
+
+  (function () {
+    const cut = localStorage.getItem('fc-actual-cutoff') || '';
+    const cutEl = document.getElementById('actual-cutoff');
+    if (cutEl) cutEl.value = cut;
+    if (cut) window.applyActualCutoff(cut, false);
+    if (localStorage.getItem('fc-actual-hidden') === '1') {
+      window.toggleActualLine(false, false);
+    }
   })();
 
   // On-chart legend (baked into the PNG export). Default off for a clean plot.
