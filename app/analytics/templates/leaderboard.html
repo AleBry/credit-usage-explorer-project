@@ -327,7 +327,7 @@
                 <tr class="rank-{{ loop.index }}">
                   <td class="rank">{{ loop.index }}</td>
                   <td>{{ item.name or '&mdash;' }}</td>
-                  <td style="color:#8a92a0; font-size:.78rem;">{{ item.email or '&mdash;' }}</td>
+                  <td style="color:var(--muted); font-size:.78rem;">{{ item.email or '&mdash;' }}</td>
                   <td class="credits">{{ '{:,.2f}'.format(item.usage_credits) }}</td>
                   <td>{{ item.usage_type_parsed_type or '&mdash;' }}</td>
                   <td>{{ item.usage_type_model or '&mdash;' }}</td>

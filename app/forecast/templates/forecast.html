@@ -20,6 +20,8 @@
         --fc-bg: #f6f8fb;
         --fc-card: rgba(255,255,255,.94);
         --fc-card-strong: #ffffff;
+        --fc-wash: rgba(255,255,255,.72);
+        --fc-wash-strong: rgba(255,255,255,.94);
         --fc-border: rgba(15, 23, 42, .10);
         --fc-soft-border: rgba(15, 23, 42, .075);
         --fc-text: #0f172a;
@@ -29,6 +31,21 @@
         --fc-red: #dc3545;
         --fc-orange: #fd7e14;
         --fc-green: #198754;
+      }
+      /* Dark theme: same structure, dark values (app-wide vars stay in app.css;
+         these are the forecast page's scoped accents/washes). */
+      [data-theme="dark"] .forecast-shell {
+        --fc-bg: #0f1216;
+        --fc-card: rgba(27,31,39,.94);
+        --fc-card-strong: #1b1f27;
+        --fc-wash: rgba(34,40,52,.7);
+        --fc-wash-strong: rgba(34,40,52,.94);
+        --fc-border: rgba(255,255,255,.09);
+        --fc-soft-border: rgba(255,255,255,.06);
+        --fc-text: #e8ebf1;
+        --fc-muted: #8b94a6;
+        --fc-faint: #79828f;
+        --fc-blue: #5b96ff;
       }
       .forecast-shell .page-title { letter-spacing: -.03em; }
       .forecast-shell .page-subtitle { color: var(--fc-muted); }
@@ -42,7 +59,7 @@
         min-height: 98px;
         border: 1px solid var(--fc-border);
         border-radius: 14px;
-        background: linear-gradient(180deg, rgba(255,255,255,.98), rgba(255,255,255,.88));
+        background: var(--fc-wash-strong);
         box-shadow: 0 12px 30px rgba(15, 23, 42, .045);
         padding: .85rem .9rem;
       }
@@ -88,7 +105,7 @@
         padding: .62rem .7rem;
         border: 1px solid var(--fc-soft-border);
         border-radius: 14px;
-        background: linear-gradient(180deg, rgba(248,250,252,.95), rgba(255,255,255,.8));
+        background: var(--fc-wash);
         font-size: .75rem;
       }
       .forecast-control-left,
@@ -131,7 +148,7 @@
         padding: .55rem .7rem;
         border: 1px dashed var(--fc-border);
         border-radius: 12px;
-        background: rgba(255,255,255,.72);
+        background: var(--fc-wash);
         font-size: .72rem;
         color: var(--fc-muted);
       }
@@ -153,7 +170,7 @@
         align-items: center;
         gap: .34rem;
         border: 1px solid var(--fc-border);
-        background: #fff;
+        background: var(--fc-card-strong);
         color: var(--fc-text);
         border-radius: 999px;
         padding: .18rem .48rem;
@@ -166,7 +183,7 @@
         margin-top: .55rem;
         border: 1px solid var(--fc-soft-border);
         border-radius: 14px;
-        background: rgba(255,255,255,.86);
+        background: var(--fc-wash-strong);
         max-height: 132px;
         overflow: auto;
         padding: .55rem;
@@ -233,7 +250,7 @@
       .forecast-summary-card {
         border: 1px solid var(--fc-border);
         border-radius: 18px;
-        background: linear-gradient(180deg, rgba(255,255,255,.98), rgba(255,255,255,.90));
+        background: var(--fc-wash-strong);
         box-shadow: 0 16px 38px rgba(15, 23, 42, .055);
         padding: 1rem;
         min-height: 132px;
@@ -261,13 +278,13 @@
         display:flex; flex-wrap:wrap; align-items:center; gap:.4rem .55rem;
         margin-top:.65rem; padding:.55rem .65rem;
         border:1px solid var(--fc-soft-border); border-radius:14px;
-        background:rgba(255,255,255,.78); font-size:.72rem; color:var(--fc-muted);
+        background: var(--fc-wash); font-size:.72rem; color:var(--fc-muted);
       }
       .fc-native-details {
         margin-top:.55rem;
         border:1px dashed var(--fc-border);
         border-radius:14px;
-        background:rgba(255,255,255,.72);
+        background: var(--fc-wash);
         padding:.45rem .65rem;
         font-size:.72rem;
         color:var(--fc-muted);
@@ -287,7 +304,7 @@
       .forecast-usage-panel {
         border: 1px solid var(--fc-soft-border);
         border-radius: 14px;
-        background: rgba(255,255,255,.72);
+        background: var(--fc-wash);
         padding: .55rem .7rem .62rem;
         margin: .15rem 0 1.1rem;
       }
@@ -329,7 +346,7 @@
         margin-top: .65rem;
         border: 1px solid var(--fc-soft-border);
         border-radius: 14px;
-        background: linear-gradient(180deg, rgba(255,255,255,.86), rgba(248,250,252,.72));
+        background: var(--fc-wash);
         padding: .55rem .65rem;
       }
       .forecast-graph-controls {
@@ -343,7 +360,7 @@
       }
       .fc-toggle-chip {
         border:1px solid rgba(148,163,184,.32);
-        background:#fff;
+        background: var(--fc-card-strong);
         border-radius:999px;
         padding:.16rem .48rem;
       }
@@ -361,7 +378,7 @@
       }
       .forecast-simple-legend .fc-summary-chip {
         border:1px solid rgba(148,163,184,.28);
-        background:rgba(255,255,255,.72);
+        background: var(--fc-wash);
         border-radius:999px;
         padding:.14rem .45rem;
         white-space:nowrap;

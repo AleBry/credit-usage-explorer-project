@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+{% block title %}Storyboard - Credit Usage Explorer{% endblock %}
+
+{% block body %}
+    <div class="container py-4" style="max-width: 1280px;">
+
+      <div class="mb-4 d-flex justify-content-between align-items-end flex-wrap gap-2">
+        <div>
+          <h1 class="page-title">Storyboard</h1>
+          <p class="page-subtitle">What's the story right now — every story condition, who's triggering it, and the notes analysts have pinned{% if reference_date %} (data through {{ reference_date }}){% endif %}.</p>
+        </div>
+        <form method="get" action="{{ url_for('analytics.storyboard') }}" class="d-flex align-items-end gap-2">
+          <div>
+            <label class="form-label tight">Window (days)</label>
+            <input class="form-control form-control-sm" type="number" name="days" value="{{ days }}" min="1" max="365" style="width:7rem;">
+          </div>
+          <button class="btn btn-primary btn-sm">Apply</button>
+        </form>
+      </div>
+
+      <!-- STORY CONDITIONS -->
+      <div class="row g-3 mb-3">
+        {% for b in boards %}
+        <div class="col-lg-4">
+          <div class="section-card h-100 mb-0">
+            <div class="d-flex justify-content-between align-items-start mb-2">
+              <h5 class="mb-0" style="font-size:.85rem;">{{ b.label }}</h5>
+              <span class="badge {{ 'bg-warning text-dark' if b.count else 'bg-secondary' }}">{{ '{:,}'.format(b.count) }}</span>
+            </div>
+            {% if b.top %}
+            <div class="mb-2">
+              {% for m in b.top %}
+              <a class="view-list-row" href="{{ url_for('analytics.user_summary', email=m.email, active_tab='stories') }}">
+                <span class="avatar avatar-sm">{{ (m.name or m.email or '?')[:2] }}</span>
+                <span class="vlr-id">
+                  <span class="vlr-name">{{ m.name or m.email }}</span>
+                  <span class="vlr-email"> &middot; {{ m.tier }}</span>
+                </span>
+                <span class="vlr-metrics">
+                  {% if b.metric == 'burst_cap' %}
+                  <span class="vlr-strong">{{ '{:.0%}'.format(m.pct_of_cap) }}</span> of allowance
+                  {% if m.cap_regime == 'weekly' %}<span class="vlr-sep">&middot;</span> weekly era{% endif %}
+                  {% elif b.metric == 'inactive' %}
+                  <span class="vlr-strong">{{ m.days_inactive }}</span> days quiet
+                  {% elif b.metric == 'pro_codex' %}
+                  <span class="vlr-strong">{{ m.times }}</span> day(s)
+                  {% endif %}
+                </span>
+                <span class="vlr-caret">&rsaquo;</span>
+              </a>
+              {% endfor %}
+            </div>
+            <a class="drill-link" href="{{ url_for('analytics.story_matches', metric=b.metric, days=days) }}">
+              View all {{ '{:,}'.format(b.count) }} &rarr;
+            </a>
+            {% else %}
+            <div class="text-muted small">No users match this condition in the last {{ days }} days.</div>
+            {% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+
+      <div class="row g-3">
+        <!-- STORY ALERT RULES -->
+        <div class="col-lg-6">
+          <div class="section-card h-100 mb-0">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <h5 class="mb-0">Story Alerts</h5>
+              <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('main.alerts_page') }}#story-alerts">Manage rules</a>
+            </div>
+            {% if story_rules %}
+            <div class="table-responsive">
+              <table class="table table-sm records-table story-matches-table mb-0">
+                <thead><tr><th>Rule</th><th>Condition</th><th>Scope</th><th>Status</th></tr></thead>
+                <tbody>
+                  {% for r in story_rules %}
+                  <tr>
+                    <td class="fw-semibold">{{ r.name }}</td>
+                    <td class="small">{{ story_metrics.get(r.metric, r.metric) | replace('N', r.days|string) }}</td>
+                    <td class="small">{{ r.email or 'All users' }}</td>
+                    <td>
+                      {% if not r.enabled %}
+                      <span class="text-muted small">disabled</span>
+                      {% elif story_hits.get(r.id) %}
+                      {% if r.email %}
+                      <a class="badge bg-warning text-dark text-decoration-none" title="{{ story_hits.get(r.id) }}"
+                         href="{{ url_for('analytics.user_summary', email=r.email, active_tab='stories') }}">&#9679; triggering</a>
+                      {% else %}
+                      <a class="badge bg-warning text-dark text-decoration-none" title="{{ story_hits.get(r.id) }} — click to see who"
+                         href="{{ url_for('analytics.story_matches', metric=r.metric, days=r.days) }}">&#9679; triggering</a>
+                      {% endif %}
+                      {% else %}
+                      <span class="text-muted small">quiet</span>
+                      {% endif %}
+                    </td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+            {% else %}
+            <div class="text-muted small">No story alert rules yet — add one on the <a href="{{ url_for('main.alerts_page') }}#story-alerts">Alerts page</a>.</div>
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- PINNED NOTES -->
+        <div class="col-lg-6">
+          <div class="section-card h-100 mb-0">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <h5 class="mb-0">Pinned Notes</h5>
+              <span class="badge bg-secondary">{{ '{:,}'.format(notes | length) }}</span>
+            </div>
+            {% if notes %}
+            <div style="max-height:420px; overflow-y:auto;">
+              {% for n in notes %}
+              <div class="border rounded-3 p-2 mb-2" style="border-color:var(--border-soft) !important;">
+                <div class="d-flex justify-content-between align-items-start gap-2">
+                  <div>
+                    <span class="fw-semibold" style="font-size:.85rem;">
+                      {% if n.tone == 'alert' %}&#9888;&#65039;{% elif n.tone == 'notable' %}&#11088;{% else %}&#128204;{% endif %}
+                      {{ n.title or 'Note' }}
+                    </span>
+                    <a class="text-decoration-none small ms-1" href="{{ url_for('analytics.user_summary', email=n.email, active_tab='stories') }}">{{ n.email }}</a>
+                    <span class="text-muted small ms-1">&middot; {{ n.tier }}</span>
+                  </div>
+                  <span class="text-muted small flex-shrink-0">{{ n.created }}</span>
+                </div>
+                {% if n.text %}<div class="small mt-1" style="color:var(--text-soft);">{{ n.text }}</div>{% endif %}
+              </div>
+              {% endfor %}
+            </div>
+            {% else %}
+            <div class="text-muted small">No analyst notes pinned yet. Pin one from any user's Stories tab.</div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+
+    </div>
+{% endblock %}

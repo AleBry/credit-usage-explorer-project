@@ -291,7 +291,7 @@ def story_pro_then_codex(df: pd.DataFrame) -> Story | None:
 
 STORY_ALERT_METRICS = {
     "inactive": "No activity in N days",
-    "burst_cap": "Burned a full monthly cap within N days",
+    "burst_cap": "Burned through their cap within N days",
     "pro_codex": "Used Pro + Codex the same day within N days",
 }
 

@@ -75,7 +75,7 @@
                 <td class="text-end tnum">{{ '{:,.0f}'.format(m.monthly_cap) }}</td>
                 <td class="text-end tnum">{{ '{:.0%}'.format(m.pct_of_cap) }}</td>
                 <td>{{ m.window_end }}</td>
-                <td>{% if m.cap_regime == 'weekly' %}<span class="badge bg-light text-dark border" title="This window ended before the weekly-to-monthly cap switch; the allowance shown is a month's worth of the weekly caps in force then.">Weekly caps</span>{% else %}Monthly cap{% endif %}</td>
+                <td>{% if m.cap_regime == 'weekly' %}<span class="badge bg-light text-dark border" title="This window ended before the weekly-to-monthly cap switch; the allowance shown is a month's worth of the weekly caps in force then.">Weekly caps</span>{% else %}<span class="badge bg-light text-dark border" title="This window ended after the switch to monthly caps.">Monthly cap</span>{% endif %}</td>
                 {% elif metric == 'inactive' %}
                 <td class="text-end tnum">{{ m.days_inactive }}</td>
                 <td>{{ m.last_active }}</td>

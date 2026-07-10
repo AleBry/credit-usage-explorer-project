@@ -29,6 +29,45 @@ if (typeof Chart !== 'undefined') {
   });
 }
 
+// Theme-aware chart colors: charts read the app's CSS variables so text/grid
+// match the active light/dark theme — applied when charts finish building
+// (window load) and again whenever the user toggles the theme.
+function bnlChartThemeColors() {
+  const css = getComputedStyle(document.documentElement);
+  const dark = document.documentElement.getAttribute('data-theme') === 'dark';
+  return {
+    text: css.getPropertyValue('--text').trim() || '#2c3140',
+    muted: css.getPropertyValue('--muted').trim() || '#8a92a0',
+    grid: dark ? 'rgba(255,255,255,.07)' : 'rgba(0,0,0,.05)',
+  };
+}
+
+function bnlApplyChartTheme() {
+  if (typeof Chart === 'undefined') return;
+  const t = bnlChartThemeColors();
+  Chart.defaults.color = t.muted;
+  Chart.defaults.borderColor = t.grid;
+  document.querySelectorAll('canvas').forEach(cv => {
+    const ch = Chart.getChart(cv);
+    if (!ch) return;
+    Object.values(ch.options.scales || {}).forEach(s => {
+      if (s.ticks) s.ticks.color = t.muted;
+      if (s.grid) s.grid.color = t.grid;
+    });
+    const legend = ch.options.plugins && ch.options.plugins.legend;
+    if (legend && legend.labels) legend.labels.color = t.text;
+    ch.update('none');
+  });
+}
+
+if (typeof Chart !== 'undefined') {
+  const t0 = bnlChartThemeColors();
+  Chart.defaults.color = t0.muted;
+  Chart.defaults.borderColor = t0.grid;
+  window.addEventListener('load', bnlApplyChartTheme);
+  window.addEventListener('bnl-theme-change', bnlApplyChartTheme);
+}
+
 // Vertical marker line at a given category label (e.g. the weekly->monthly cap
 // switch week). Set chart.$marker = { week: 'YYYY-MM-DD', label: '...' }.
 if (typeof Chart !== 'undefined') {

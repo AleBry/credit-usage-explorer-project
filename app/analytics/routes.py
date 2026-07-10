@@ -489,10 +489,74 @@ def create_analytics_blueprint(services) -> Blueprint:
         flash("Note removed.", "success")
         return redirect(url_for("analytics.user_summary", email=email))
 
+    @bp.route("/storyboard", methods=["GET"])
+    def storyboard() -> str:
+        """Org-wide stories hub: every story condition with its current top
+        matches, the configured story-alert rules and their live status, and
+        all pinned analyst notes — one place to see 'what's the story' today."""
+        from app.analytics.stories import STORY_ALERT_METRICS, evaluate_story_rules, story_metric_matches
+
+        d = data()
+        gov = services.governance
+        cap_by_email, default_cap = gov.monthly_cap_by_email()
+        change_date = gov.tier_config().get("cap_period_change_date")
+        reference_date = None
+        if "date_partition" in d.df.columns:
+            reference_date = pd.to_datetime(d.df["date_partition"], errors="coerce").max()
+
+        try:
+            days = max(int(request.args.get("days", 30) or 30), 1)
+        except (TypeError, ValueError):
+            days = 30
+
+        tiers = gov.resolved_assignments()
+        boards = []
+        for metric, label in STORY_ALERT_METRICS.items():
+            matches = story_metric_matches(
+                d.df, metric, days, cap_by_email, default_cap, reference_date,
+                cap_change_date=change_date,
+            )
+            for m in matches:
+                m["tier"] = tiers.get(m["email"], "Baseline")
+            boards.append({
+                "metric": metric,
+                "label": label.replace("N days", f"{days} days"),
+                "count": len(matches),
+                "top": matches[:6],
+            })
+
+        # Configured story rules + live triggering status (same eval the bell uses).
+        story_rules = config_svc.load_story_alert_rules()
+        hits = {
+            a["id"].split("story:", 1)[-1]: a["detail"]
+            for a in evaluate_story_rules(
+                d.df, story_rules, cap_by_email, default_cap, reference_date,
+                cap_change_date=change_date,
+            )
+        }
+
+        # Pinned analyst notes across all users, newest first.
+        notes = []
+        for note_email, user_notes in config_svc.load_user_notes().items():
+            for n in user_notes:
+                notes.append({**n, "email": note_email, "tier": tiers.get(note_email, "Baseline")})
+        notes.sort(key=lambda n: str(n.get("created", "")), reverse=True)
+
+        return render_template(
+            "storyboard.html",
+            boards=boards,
+            days=days,
+            story_rules=story_rules,
+            story_hits=hits,
+            story_metrics=STORY_ALERT_METRICS,
+            notes=notes,
+            reference_date=str(reference_date.date()) if reference_date is not None and not pd.isna(reference_date) else "",
+        )
+
     @bp.route("/story-matches", methods=["GET"])
     def story_matches() -> str:
         """Everyone who triggered a story metric — the click-through target for
-        org-wide story alerts like 'N users burned a monthly cap in 30 days'."""
+        org-wide story alerts like 'N users burned through their cap in 30 days'."""
         from app.analytics.stories import STORY_ALERT_METRICS, story_metric_matches
 
         d = data()

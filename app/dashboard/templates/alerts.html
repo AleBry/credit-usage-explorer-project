@@ -228,9 +228,9 @@
             <div class="col-md-3">
               <label class="form-label">Condition</label>
               <select class="form-select form-select-sm" name="metric">
-                <option value="inactive">No activity in N days</option>
-                <option value="burst_cap">Burned a full monthly cap within N days</option>
-                <option value="pro_codex">Pro + Codex same day within N days</option>
+                {% for key, label in story_metrics.items() %}
+                <option value="{{ key }}">{{ label }}</option>
+                {% endfor %}
               </select>
             </div>
             <div class="col-md-2">

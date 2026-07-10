@@ -547,6 +547,14 @@ th[data-col]:hover .sort-indicator { opacity: .55; }
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* Storyboard condition cards: one line per user — long tier names ellipsize
+   instead of wrapping the row tall. */
+.section-card .view-list-row .vlr-id {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 .filter-bar {
   background: var(--surface);
