@@ -754,7 +754,7 @@ if (typeof Chart !== 'undefined') {
         ctx.setLineDash([]);
         // Shared pill label from charts.js — flips left of the line near the
         // chart's right edge; stacked one row per event.
-        bnlDrawMarkerLabel(ctx, ev.label || 'credits added', x, top, right, '#198754', i);
+        bnlDrawMarkerLabel(ctx, ev.label || 'credits added', x, top + 4 + i * 15, right, '#198754');
         ctx.restore();
       });
     },

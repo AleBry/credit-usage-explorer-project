@@ -289,8 +289,9 @@ def create_analytics_blueprint(services) -> Blueprint:
                                 ("top", top_n if top_n != 25 else ""),
                             ])
 
-    @bp.route("/user-summary", methods=["GET"])
-    def user_summary() -> str:
+    def _user_summary_state() -> dict:
+        """Filtered records for one user plus the query params that shaped
+        them — shared by the user-summary page and its CSV export."""
         d = data()
         name = request.args.get("name", "")
         email = request.args.get("email", "")
@@ -299,7 +300,6 @@ def create_analytics_blueprint(services) -> Blueprint:
         end_date = request.args.get("end_date", "")
         sort_by = request.args.get("sort_by", "")
         sort_order = request.args.get("sort_order", "asc")
-        active_tab = request.args.get("active_tab", "overview")
         is_form_submission = bool(request.args.get("fs", ""))
         models_explicitly_set = bool(request.args.get("mfs", ""))
         min_credits = request.args.get("min_credits", "").strip()
@@ -357,6 +357,54 @@ def create_analytics_blueprint(services) -> Blueprint:
         else:
             display_columns = [c for c in selected_fields if c in df.columns]
 
+        return {
+            "d": d,
+            "df": df,
+            "user_scope_df": user_scope_df,
+            "name": name,
+            "email": email,
+            "date_field": date_field,
+            "start_date": start_date,
+            "end_date": end_date,
+            "sort_by": sort_by,
+            "sort_order": sort_order,
+            "is_form_submission": is_form_submission,
+            "min_credits": min_credits,
+            "max_credits": max_credits,
+            "zero_credits": zero_credits,
+            "user_types": user_types,
+            "filter_types": filter_types,
+            "user_models": user_models,
+            "filter_models": filter_models,
+            "selected_fields": selected_fields,
+            "display_columns": display_columns,
+        }
+
+    @bp.route("/user-summary", methods=["GET"])
+    def user_summary() -> str:
+        state = _user_summary_state()
+        d = state["d"]
+        df = state["df"]
+        user_scope_df = state["user_scope_df"]
+        name = state["name"]
+        email = state["email"]
+        date_field = state["date_field"]
+        start_date = state["start_date"]
+        end_date = state["end_date"]
+        sort_by = state["sort_by"]
+        sort_order = state["sort_order"]
+        is_form_submission = state["is_form_submission"]
+        min_credits = state["min_credits"]
+        max_credits = state["max_credits"]
+        zero_credits = state["zero_credits"]
+        user_types = state["user_types"]
+        filter_types = state["filter_types"]
+        user_models = state["user_models"]
+        filter_models = state["filter_models"]
+        selected_fields = state["selected_fields"]
+        display_columns = state["display_columns"]
+        active_tab = request.args.get("active_tab", "overview")
+
         record_columns, rows_data = build_record_view(df, display_columns)
         total_credits = float(df["usage_credits"].sum()) if "usage_credits" in df.columns else 0.0
 
@@ -387,6 +435,7 @@ def create_analytics_blueprint(services) -> Blueprint:
         summ_raw = make_summary("usage_type")
 
         user_weekly_json = "[]"
+        user_weekly_caps_json = "[]"
         if "date_partition" in df.columns and "usage_credits" in df.columns:
             wdf = df[["date_partition", "usage_credits"]].copy()
             wdf["_d"] = pd.to_datetime(wdf["date_partition"], errors="coerce")
@@ -398,6 +447,20 @@ def create_analytics_blueprint(services) -> Blueprint:
                     {"week": str(r["_w"].date()), "credits": round(float(r["credits"]), 2)}
                     for _, r in agg.iterrows()
                 ])
+                # Effective weekly cap per plotted week for this user's tier —
+                # regime-aware (weeks before the weekly->monthly switch use the
+                # old flat weekly cap), drawn as a dashed cap line on the chart.
+                try:
+                    gov = services.governance
+                    tier = gov.tier_for(email) if email else "Baseline"
+                    caps_rows = []
+                    for ws in agg["_w"]:
+                        cap = gov.weekly_caps(week_start=ws).get(tier)
+                        if cap:
+                            caps_rows.append({"week": str(ws.date()), "cap": round(float(cap), 2)})
+                    user_weekly_caps_json = json.dumps(caps_rows)
+                except Exception:
+                    user_weekly_caps_json = "[]"
 
         type_chart_json = json.dumps([
             {"label": s.get("usage_type_parsed_type") or "Other",
@@ -449,12 +512,89 @@ def create_analytics_blueprint(services) -> Blueprint:
             sort_order=sort_order,
             is_form_submission=is_form_submission,
             user_weekly_json=user_weekly_json,
+            user_weekly_caps_json=user_weekly_caps_json,
             user_usage_type_weekly=usage_type_weekly_json(df),
             type_chart_json=type_chart_json,
             optimization_page_available=optimization_page_available,
             tier_editing_locked=config_svc.is_tier_editing_locked(),
             user_notes=config_svc.load_user_notes().get((email or "").strip().lower(), []),
             **user_ctx,
+        )
+
+    @bp.route("/user-summary/export.csv", methods=["GET"])
+    def user_summary_export_csv() -> object:
+        state = _user_summary_state()
+        columns, rows = build_record_view(state["df"], state["display_columns"])
+        export_df = pd.DataFrame(
+            [{c["label"]: row.get(c["key"]) for c in columns} for row in rows],
+            columns=[c["label"] for c in columns],
+        )
+        date_range = (
+            f"{state['start_date']}_to_{state['end_date']}"
+            if state["start_date"] or state["end_date"] else ""
+        )
+        credit_range = (
+            f"{state['min_credits'] or '0'}_to_{state['max_credits'] or 'max'}"
+            if state["min_credits"] or state["max_credits"] else ""
+        )
+        types_narrowed = len(state["filter_types"]) < len(state["user_types"])
+        models_narrowed = len(state["filter_models"]) < len(state["user_models"])
+        sort = f"{state['sort_by']}_{state['sort_order']}" if state["sort_by"] else ""
+        return csv_response(export_df, "user_summary_records.csv", filters=[
+            ("user", state["email"] or state["name"]),
+            ("dates", date_range),
+            ("credits", credit_range),
+            ("zero", "only" if state["zero_credits"] == "1" else ""),
+            ("types", f"{len(state['filter_types'])}of{len(state['user_types'])}" if types_narrowed else ""),
+            ("models", f"{len(state['filter_models'])}of{len(state['user_models'])}" if models_narrowed else ""),
+            ("sort", sort),
+        ])
+
+    @bp.route("/user-summary/optimization-export.csv", methods=["GET"])
+    def user_summary_optimization_export_csv() -> object:
+        """This user's weekly cap-utilization history. The Optimization card's
+        table shows only the latest 12 weeks; the export carries all of them."""
+        from app.optimization.service import build_optimization_result
+
+        d = data()
+        email = request.args.get("email", "").strip()
+        name = request.args.get("name", "").strip()
+        gov = services.governance
+        opt = build_optimization_result(d.df, gov.tier_config(), gov.resolved_assignments())
+        hist = opt.user_week_history
+        if hist is None or hist.empty:
+            hist = pd.DataFrame()
+        elif email and "email" in hist.columns:
+            hist = hist[hist["email"].astype(str).str.lower() == email.lower()]
+        elif name and "latest_name" in hist.columns:
+            hist = hist[hist["latest_name"].astype(str).str.contains(name, case=False, na=False, regex=False)]
+        else:
+            hist = pd.DataFrame()
+
+        cols = [
+            ("Week start", "week_start"), ("Week end", "week_end"),
+            ("Tier", "governance_tier"), ("Credits used", "credits_used"),
+            ("Weekly cap", "weekly_credit_cap"), ("Utilization", "cap_utilization"),
+            ("Remaining", "remaining_weekly_credits"), ("Pressure", "pressure_flag"),
+        ]
+        rows = []
+        if not hist.empty:
+            for _, r in hist.sort_values("week_start", ascending=False).iterrows():
+                row = {}
+                for label, key in cols:
+                    v = r.get(key, "")
+                    if key in ("week_start", "week_end") and hasattr(v, "date"):
+                        v = str(v.date())
+                    elif key == "cap_utilization" and v != "":
+                        v = round(float(v), 4)
+                    elif key in ("credits_used", "weekly_credit_cap", "remaining_weekly_credits") and v != "":
+                        v = round(float(v), 2)
+                    row[label] = v
+                rows.append(row)
+        return csv_response(
+            pd.DataFrame(rows, columns=[label for label, _ in cols]),
+            "user_optimization_history.csv",
+            filters=[("user", email or name)],
         )
 
     @bp.route("/user-summary/note", methods=["POST"])

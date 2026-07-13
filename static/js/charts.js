@@ -100,16 +100,19 @@ if (typeof Chart !== 'undefined') {
       ctx.setLineDash([5, 3]);
       ctx.stroke();
       ctx.setLineDash([]);
-      bnlDrawMarkerLabel(ctx, m.label || 'monthly caps', x, top, right, '#d63384');
+      // Label sits ABOVE the plot area (renderUsageTypeChart reserves the
+      // headroom) so it never covers the bars.
+      bnlDrawMarkerLabel(ctx, m.label || 'monthly caps', x, Math.max(top - 17, 1), right, '#d63384');
       ctx.restore();
     },
   });
 }
 
-// Label pill for vertical marker lines. Flips to the left side of the line
-// when the text would clip past the chart's right edge, and sits on a
-// theme-matched backing so it stays readable over bars/lines.
-function bnlDrawMarkerLabel(ctx, text, x, top, right, color, row = 0) {
+// Label pill for vertical marker lines, drawn with its top edge at `y`.
+// Flips to the left side of the line when the text would clip past the
+// chart's right edge, and sits on a theme-matched backing so it stays
+// readable over bars/lines.
+function bnlDrawMarkerLabel(ctx, text, x, y, right, color) {
   const dark = document.documentElement.getAttribute('data-theme') === 'dark';
   ctx.font = '10px sans-serif';
   const w = ctx.measureText(text).width;
@@ -117,7 +120,7 @@ function bnlDrawMarkerLabel(ctx, text, x, top, right, color, row = 0) {
   const gap = 5;
   const onRight = x + gap + w + pad * 2 <= right;
   const tx = onRight ? x + gap : x - gap - w - pad * 2;
-  const ty = top + 4 + row * 15;
+  const ty = y;
   ctx.fillStyle = dark ? 'rgba(30,33,42,.82)' : 'rgba(255,255,255,.82)';
   ctx.beginPath();
   if (ctx.roundRect) ctx.roundRect(tx, ty, w + pad * 2, 13, 3);
@@ -158,19 +161,43 @@ function renderUsageTypeChart(canvasId, data, opts = {}) {
     borderWidth: 0,
     borderRadius: 2,
   }));
+  // Optional horizontal cap line: opts.capSeries = [{week, cap}]. Drawn as a
+  // stepped dashed line so a cap change (e.g. the weekly->monthly regime
+  // switch) shows as a step. Its own stack group keeps it out of the bar
+  // stack; _capLine keeps it out of the tooltip's Total footer.
+  if (opts.capSeries && opts.capSeries.length) {
+    const capByWeek = {};
+    opts.capSeries.forEach(c => { capByWeek[c.week] = c.cap; });
+    datasets.push({
+      type: 'line',
+      label: opts.capLabel || 'Weekly cap',
+      data: data.weeks.map(w => capByWeek[w] != null ? capByWeek[w] : null),
+      borderColor: '#d63384', borderWidth: 1.5, borderDash: [6, 4],
+      backgroundColor: 'transparent', fill: false,
+      pointRadius: 0, pointHoverRadius: 0, stepped: 'middle',
+      // Legend swatch: a dashed line segment instead of a filled circle.
+      pointStyle: 'line',
+      spanGaps: true, stack: 'bnl-cap-line', order: -1, _capLine: true,
+    });
+  }
   const chart = new BNLChart(canvasId, {
     type: 'bar',
     data: { labels: data.weeks, datasets },
     options: {
       responsive: true, maintainAspectRatio: false,
       interaction: { mode: 'index', intersect: false },
+      // Headroom for the regime-marker label pill, drawn above the plot area
+      // so it never covers the bars.
+      ...(opts.markerWeek ? { layout: { padding: { top: 18 } } } : {}),
       plugins: {
         legend: { display: true, position: 'bottom', labels: { font: { size: 10 }, boxWidth: 12, padding: 8, usePointStyle: true } },
         tooltip: {
           callbacks: {
             title: items => 'Week of ' + items[0].label,
             label: ctx => `  ${ctx.dataset.label}: ${Math.round(ctx.raw || 0).toLocaleString()} credits`,
-            footer: items => 'Total: ' + Math.round(items.reduce((s, i) => s + (i.raw || 0), 0)).toLocaleString(),
+            footer: items => 'Total: ' + Math.round(
+              items.filter(i => !i.dataset._capLine).reduce((s, i) => s + (i.raw || 0), 0)
+            ).toLocaleString(),
           },
         },
       },
