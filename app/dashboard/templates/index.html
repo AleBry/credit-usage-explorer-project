@@ -193,6 +193,14 @@
           </div>
           <div class="d-flex align-items-center gap-2">
             <span class="count">{{ '{:,}'.format(row_count) }} records</span>
+            {% if rows_shown < row_count %}
+            <span class="text-muted small" title="The table shows the first {{ '{:,}'.format(rows_shown) }} rows for speed — filters and sort still apply to everything. Pick a bigger cap here, or Export CSV for the full filtered set.">
+              showing first {{ '{:,}'.format(rows_shown) }} &middot; show
+              {%- for n, url in limit_options %}{% if n == 0 or n > rows_shown %}
+              <a class="text-decoration-none" href="{{ url }}">{{ 'all' if n == 0 else '{:,}'.format(n) }}</a>
+              {%- endif %}{% endfor %}
+            </span>
+            {% endif %}
             <a class="btn btn-outline-success btn-sm" href="{{ export_url }}">Export CSV</a>
           </div>
         </div>
@@ -215,27 +223,7 @@
             </thead>
 
             <tbody>
-              {% for row in rows %}
-              <tr>
-                {% for c in columns %}
-                <td class="{% if c.align == 'right' %}text-end tnum{% endif %}">
-                  {%- if c.key == 'name' and row._email -%}
-                    <a href="{{ url_for('analytics.user_summary', email=row._email) }}" class="cell-clip" title="{{ row[c.key] }}">{{ row[c.key] }}</a>
-                  {%- elif c.clip -%}
-                    <span class="cell-clip" title="{{ row[c.key] }}">{{ row[c.key] }}</span>
-                  {%- else -%}
-                    {{ row[c.key] }}
-                  {%- endif -%}
-                </td>
-                {% endfor %}
-              </tr>
-              {% else %}
-              <tr>
-                <td colspan="{{ columns|length or 1 }}" class="text-center text-muted py-4">
-                  No records found
-                </td>
-              </tr>
-              {% endfor %}
+              {{ rows_html | safe }}
             </tbody>
           </table>
         </div>

@@ -8,7 +8,7 @@ from flask import Blueprint, current_app, flash, redirect, render_template, requ
 
 from app.dashboard.service import DEFAULT_RECORD_COLUMNS, build_record_view, record_column_meta
 from app.shared.chart_data import usage_type_weekly_json
-from app.shared.csv_export import csv_response
+from app.shared.csv_export import csv_response, labeled_export_df, range_slug
 from app.shared.data_store import CreditUsageData
 from app.shared.outliers import OUTLIER_VIEWS, compute_outliers
 from .service import Leaderboards
@@ -133,16 +133,23 @@ def create_analytics_blueprint(services) -> Blueprint:
         )
         all_tiers = _tier_options(d)
 
+        # Tab switches are full page loads, so only the active tab's board is
+        # computed; the hidden panels render from empty lists for free.
         lb = Leaderboards(df, top_n)
-        lb_users = lb.by_user()
-        lb_users_by_type = lb.by_user_type()
-        lb_models = lb.by_model()
-        lb_usage_types = lb.by_usage_type()
-        lb_biggest_single = lb.biggest_single()
-        lb_daily = lb.daily()
-        lb_weekly = lb.weekly()
-        lb_monthly = lb.monthly()
-        lb_yearly = lb.yearly()
+        board_builders = {
+            "users": ("lb_users", lb.by_user),
+            "users_by_type": ("lb_users_by_type", lb.by_user_type),
+            "models": ("lb_models", lb.by_model),
+            "usage_types": ("lb_usage_types", lb.by_usage_type),
+            "biggest_single": ("lb_biggest_single", lb.biggest_single),
+            "daily": ("lb_daily", lb.daily),
+            "weekly": ("lb_weekly", lb.weekly),
+            "monthly": ("lb_monthly", lb.monthly),
+            "yearly": ("lb_yearly", lb.yearly),
+        }
+        boards: dict[str, list] = {var: [] for var, _ in board_builders.values()}
+        active_var, build_active = board_builders.get(active_tab, board_builders["users"])
+        boards[active_var] = build_active()
 
         base_params = {k: v for k, v in {
             "usage_type_filter": usage_type_filter,
@@ -169,15 +176,7 @@ def create_analytics_blueprint(services) -> Blueprint:
             all_usage_types=all_usage_types,
             all_models=all_models,
             all_tiers=all_tiers,
-            lb_users=lb_users,
-            lb_users_by_type=lb_users_by_type,
-            lb_models=lb_models,
-            lb_usage_types=lb_usage_types,
-            lb_biggest_single=lb_biggest_single,
-            lb_daily=lb_daily,
-            lb_weekly=lb_weekly,
-            lb_monthly=lb_monthly,
-            lb_yearly=lb_yearly,
+            **boards,
             base_query=urlencode(base_params),
             min_credits=min_credits,
             max_credits=max_credits,
@@ -264,27 +263,15 @@ def create_analytics_blueprint(services) -> Blueprint:
             ),
         }
         rows, columns = boards.get(active_tab, boards["users"])
-        export_rows = []
-        for idx, row in enumerate(rows, start=1):
-            row = dict(row)
-            row["_rank"] = idx
-            export_rows.append({label: row.get(key, "") for label, key in columns})
-        date_range = (
-            f"{request.args.get('start_date', '')}_to_{request.args.get('end_date', '')}"
-            if request.args.get("start_date", "") or request.args.get("end_date", "") else ""
-        )
-        credit_range = (
-            f"{request.args.get('min_credits', '').strip() or '0'}_to_"
-            f"{request.args.get('max_credits', '').strip() or 'max'}"
-            if request.args.get("min_credits", "").strip() or request.args.get("max_credits", "").strip()
-            else ""
-        )
-        return csv_response(pd.DataFrame(export_rows, columns=[label for label, _ in columns]),
+        export_rows = [{**row, "_rank": idx} for idx, row in enumerate(rows, start=1)]
+        return csv_response(labeled_export_df(export_rows, columns),
                             f"leaderboard_{active_tab}.csv", filters=[
                                 ("type", request.args.get("usage_type_filter", "")),
                                 ("model", request.args.get("model_filter", "")),
-                                ("dates", date_range),
-                                ("credits", credit_range),
+                                ("dates", range_slug(request.args.get("start_date", ""),
+                                                     request.args.get("end_date", ""))),
+                                ("credits", range_slug(request.args.get("min_credits", "").strip(),
+                                                       request.args.get("max_credits", "").strip(), "0", "max")),
                                 ("zero", "only" if request.args.get("zero_credits") == "1" else ""),
                                 ("top", top_n if top_n != 25 else ""),
                             ])
@@ -525,25 +512,13 @@ def create_analytics_blueprint(services) -> Blueprint:
     def user_summary_export_csv() -> object:
         state = _user_summary_state()
         columns, rows = build_record_view(state["df"], state["display_columns"])
-        export_df = pd.DataFrame(
-            [{c["label"]: row.get(c["key"]) for c in columns} for row in rows],
-            columns=[c["label"] for c in columns],
-        )
-        date_range = (
-            f"{state['start_date']}_to_{state['end_date']}"
-            if state["start_date"] or state["end_date"] else ""
-        )
-        credit_range = (
-            f"{state['min_credits'] or '0'}_to_{state['max_credits'] or 'max'}"
-            if state["min_credits"] or state["max_credits"] else ""
-        )
         types_narrowed = len(state["filter_types"]) < len(state["user_types"])
         models_narrowed = len(state["filter_models"]) < len(state["user_models"])
         sort = f"{state['sort_by']}_{state['sort_order']}" if state["sort_by"] else ""
-        return csv_response(export_df, "user_summary_records.csv", filters=[
+        return csv_response(labeled_export_df(rows, columns), "user_summary_records.csv", filters=[
             ("user", state["email"] or state["name"]),
-            ("dates", date_range),
-            ("credits", credit_range),
+            ("dates", range_slug(state["start_date"], state["end_date"])),
+            ("credits", range_slug(state["min_credits"], state["max_credits"], "0", "max")),
             ("zero", "only" if state["zero_credits"] == "1" else ""),
             ("types", f"{len(state['filter_types'])}of{len(state['user_types'])}" if types_narrowed else ""),
             ("models", f"{len(state['filter_models'])}of{len(state['user_models'])}" if models_narrowed else ""),
@@ -754,14 +729,13 @@ def create_analytics_blueprint(services) -> Blueprint:
             "pro_codex": [("Same-day Pro+Codex days", "times"), ("Most recent", "last_date")],
         }
         columns = [("Name", "name"), ("Email", "email"), ("Tier", "tier")] + per_metric.get(metric, [])
-        export_rows = []
-        for m in matches:
-            row = dict(m)
-            if row.get("pct_of_cap") is not None:
-                row["_pct"] = round(float(row["pct_of_cap"]) * 100, 1)
-            export_rows.append({label: row.get(key, "") for label, key in columns})
+        export_rows = [
+            {**m, "_pct": round(float(m["pct_of_cap"]) * 100, 1)}
+            if m.get("pct_of_cap") is not None else m
+            for m in matches
+        ]
         return csv_response(
-            pd.DataFrame(export_rows, columns=[label for label, _ in columns]),
+            labeled_export_df(export_rows, columns),
             f"story_matches_{metric}.csv",
             filters=[("days", days)],
         )

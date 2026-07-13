@@ -1,0 +1,23 @@
+{#- Records table body. Rendered separately from index.html so the route can
+    cache the (large) result per dataset + query — see records_page. -#}
+{% for row in rows %}
+<tr>
+  {% for c in columns %}
+  <td class="{% if c.align == 'right' %}text-end tnum{% endif %}">
+    {%- if c.key == 'name' and row._email -%}
+      <a href="{{ url_for('analytics.user_summary', email=row._email) }}" class="cell-clip" title="{{ row[c.key] }}">{{ row[c.key] }}</a>
+    {%- elif c.clip -%}
+      <span class="cell-clip" title="{{ row[c.key] }}">{{ row[c.key] }}</span>
+    {%- else -%}
+      {{ row[c.key] }}
+    {%- endif -%}
+  </td>
+  {% endfor %}
+</tr>
+{% else %}
+<tr>
+  <td colspan="{{ columns|length or 1 }}" class="text-center text-muted py-4">
+    No records found
+  </td>
+</tr>
+{% endfor %}

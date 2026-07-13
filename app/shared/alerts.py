@@ -157,7 +157,49 @@ def evaluate_rules(df, rules: list) -> list[dict]:
     return out
 
 
+# The bell renders on every page, but its inputs only change when data is
+# uploaded (a new CreditUsageData object) or a rule/config file is edited —
+# so cache the computed alerts and key the cache on exactly those inputs.
+# The TTL is a backstop for time-driven conditions (stale-data age, forecast
+# day rollover) so they still refresh on a quiet install.
+_ALERTS_TTL_SECONDS = 60.0
+_alerts_cache: dict = {"key": None, "expires": 0.0, "alerts": []}
+
+
+def _alerts_cache_key(services) -> tuple:
+    import os
+
+    def mtime(path) -> int:
+        try:
+            return os.stat(path).st_mtime_ns
+        except OSError:
+            return 0
+
+    cfg = services.config_svc
+    return (
+        id(services.store.data),
+        mtime(cfg.alert_rules_path),
+        mtime(cfg.story_rules_path),
+        mtime(cfg.tier_path),
+        mtime(cfg.contract_path),
+        mtime(cfg.user_tiers_path),
+    )
+
+
 def compute_alerts(services) -> list[dict]:
+    import time
+
+    key = _alerts_cache_key(services)
+    if _alerts_cache["key"] == key and time.monotonic() < _alerts_cache["expires"]:
+        return _alerts_cache["alerts"]
+    alerts = _compute_alerts_uncached(services)
+    _alerts_cache.update(
+        key=key, expires=time.monotonic() + _ALERTS_TTL_SECONDS, alerts=alerts
+    )
+    return alerts
+
+
+def _compute_alerts_uncached(services) -> list[dict]:
     alerts: list[dict] = []
     config_svc = services.config_svc
 

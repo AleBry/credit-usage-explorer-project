@@ -370,16 +370,32 @@ def story_metric_matches(
         # the weekly-cap regime: the allowance quantity is the same (a month's
         # worth), but calling it "monthly cap" there is anachronistic — flag
         # the regime so alerts and the drill-down can say it honestly.
+        #
+        # Vectorized as one users x calendar-days matrix: this runs on every
+        # page load via the navbar alerts, so it must stay O(matrix), not
+        # O(users) pandas calls (the per-user loop cost ~1ms x 1,000 users).
         change = pd.to_datetime(cap_change_date, errors="coerce")
-        for em, g in d.groupby("_email"):
-            daily = g.groupby(g["_date"].dt.normalize())["_credits"].sum().sort_index()
-            if daily.empty:
-                continue
-            rolled = daily.rolling(f"{days}D").sum()
-            peak = float(rolled.max())
-            cap = float(caps.get(em, default_monthly_cap))
-            if cap > 0 and peak >= cap:
-                window_end = rolled.idxmax()
+        daily = (
+            d.groupby(["_email", d["_date"].dt.normalize()])["_credits"]
+            .sum().unstack(fill_value=0.0)
+        )
+        if not daily.empty:
+            full_days = pd.date_range(daily.columns.min(), daily.columns.max(), freq="D")
+            daily = daily.reindex(columns=full_days, fill_value=0.0)
+            # Rolling N-calendar-day sum ending at each day: cum[t] - cum[t-N].
+            cum = daily.cumsum(axis=1)
+            rolled = cum - cum.shift(days, axis=1).fillna(0.0)
+            peaks = rolled.max(axis=1)
+            window_ends = rolled.idxmax(axis=1)
+            cap_s = pd.Series(
+                [float(caps.get(em, default_monthly_cap)) for em in daily.index],
+                index=daily.index,
+            )
+            hit = (cap_s > 0) & (peaks >= cap_s)
+            for em in daily.index[hit]:
+                peak = float(peaks[em])
+                cap = float(cap_s[em])
+                window_end = window_ends[em]
                 weekly_era = not pd.isna(change) and window_end < change
                 matches.append({
                     "email": em,

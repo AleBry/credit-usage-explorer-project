@@ -61,6 +61,30 @@ def dated_csv_filename(filename: str, filters: Iterable[tuple[str, object]] | No
     return f"{name}{suffix}"
 
 
+def labeled_export_df(rows: Iterable[dict], columns: Iterable) -> pd.DataFrame:
+    """Rows -> DataFrame with human column labels, ready for csv_response.
+
+    ``columns`` is either ``(label, key)`` pairs or ``build_record_view``-style
+    dicts with ``label``/``key`` — the two shapes every table export uses.
+    """
+    pairs = [
+        (c["label"], c["key"]) if isinstance(c, dict) else (c[0], c[1])
+        for c in columns
+    ]
+    return pd.DataFrame(
+        [{label: row.get(key, "") for label, key in pairs} for row in rows],
+        columns=[label for label, _ in pairs],
+    )
+
+
+def range_slug(start: object, end: object, default_start: str = "", default_end: str = "") -> str:
+    """``"X_to_Y"`` when either bound is set, else ``""`` — the filename
+    fragment for date/credit ranges in export filters."""
+    if not (start or end):
+        return ""
+    return f"{start or default_start}_to_{end or default_end}"
+
+
 def csv_response(
     df: pd.DataFrame,
     filename: str,

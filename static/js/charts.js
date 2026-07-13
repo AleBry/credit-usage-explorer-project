@@ -68,47 +68,8 @@ if (typeof Chart !== 'undefined') {
   window.addEventListener('bnl-theme-change', bnlApplyChartTheme);
 }
 
-// Vertical marker line at a regime boundary (e.g. the weekly->monthly cap
-// switch). Set chart.$marker = { week: 'YYYY-MM-DD', label: '...' }.
-// `week` may be any date: the line lands on the first category label >= it,
-// drawn at that bar's LEFT edge so bars before the line are the old regime
-// and bars from the line on are the new one.
-if (typeof Chart !== 'undefined') {
-  Chart.register({
-    id: 'bnl-week-marker',
-    afterDraw(chart) {
-      const m = chart.$marker;
-      if (!m || !m.week) return;
-      const labels = chart.data.labels || [];
-      let idx = labels.indexOf(m.week);
-      if (idx < 0) idx = labels.findIndex(w => String(w) >= m.week);
-      if (idx < 0) return;
-      const xScale = chart.scales.x;
-      const { ctx, chartArea: { top, bottom, left, right } } = chart;
-      // Boundary between the previous bar and the switch bar (bar centers are
-      // what getPixelForValue returns on a category scale).
-      const x = idx > 0
-        ? (xScale.getPixelForValue(idx - 1) + xScale.getPixelForValue(idx)) / 2
-        : left;
-      if (!Number.isFinite(x) || x < left - 1 || x > right + 1) return;
-      ctx.save();
-      ctx.beginPath();
-      ctx.moveTo(x, top);
-      ctx.lineTo(x, bottom);
-      ctx.lineWidth = 1.5;
-      ctx.strokeStyle = 'rgba(214,51,132,.9)';
-      ctx.setLineDash([5, 3]);
-      ctx.stroke();
-      ctx.setLineDash([]);
-      // Label sits ABOVE the plot area (renderUsageTypeChart reserves the
-      // headroom) so it never covers the bars.
-      bnlDrawMarkerLabel(ctx, m.label || 'monthly caps', x, Math.max(top - 17, 1), right, '#d63384');
-      ctx.restore();
-    },
-  });
-}
-
-// Label pill for vertical marker lines, drawn with its top edge at `y`.
+// Label pill for vertical marker lines (e.g. the forecast chart's
+// credit-event markers), drawn with its top edge at `y`.
 // Flips to the left side of the line when the text would clip past the
 // chart's right edge, and sits on a theme-matched backing so it stays
 // readable over bars/lines.
@@ -186,9 +147,6 @@ function renderUsageTypeChart(canvasId, data, opts = {}) {
     options: {
       responsive: true, maintainAspectRatio: false,
       interaction: { mode: 'index', intersect: false },
-      // Headroom for the regime-marker label pill, drawn above the plot area
-      // so it never covers the bars.
-      ...(opts.markerWeek ? { layout: { padding: { top: 18 } } } : {}),
       plugins: {
         legend: { display: true, position: 'bottom', labels: { font: { size: 10 }, boxWidth: 12, padding: 8, usePointStyle: true } },
         tooltip: {
@@ -211,10 +169,6 @@ function renderUsageTypeChart(canvasId, data, opts = {}) {
     },
   }, { exportName: opts.exportName || 'Credits by Usage Type per Week' });
   chart._stacked = stacked;
-  if (opts.markerWeek) {
-    chart.chart.$marker = { week: opts.markerWeek, label: opts.markerLabel || 'monthly caps' };
-    chart.chart.update();
-  }
   return chart;
 }
 

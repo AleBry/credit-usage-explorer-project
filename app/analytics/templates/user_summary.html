@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "macros/ui.html" import export_csv_chip %}
 {% block title %}User Summary - Credit Usage Explorer{% endblock %}
 {% block extra_head %}
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
@@ -465,11 +466,10 @@
             {% if optimization_history %}
             <div class="d-flex justify-content-between align-items-center mt-3 mb-2">
               <h6 class="mb-0" style="font-size:.85rem; font-weight:700;">Weekly Cap History</h6>
-              <a class="btn btn-outline-success btn-sm py-0 px-2" style="font-size:.74rem;"
-                 title="Download this user's full weekly cap-utilization history (the table below shows the latest 12 weeks)"
-                 href="{{ url_for('analytics.user_summary_optimization_export_csv',
-                                  email=email or (optimization_user.email if optimization_user else ''),
-                                  name=name) }}">Export CSV</a>
+              {{ export_csv_chip(url_for('analytics.user_summary_optimization_export_csv',
+                                         email=email or (optimization_user.email if optimization_user else ''),
+                                         name=name),
+                                 "Download this user's full weekly cap-utilization history (the table below shows the latest 12 weeks)") }}
             </div>
             <div style="max-height:360px; overflow:auto;">
               <table class="table table-sm records-table mb-0">
@@ -779,9 +779,8 @@
             <div class="d-flex justify-content-between align-items-center mb-3">
               <h5 class="mb-0">Records</h5>
               <div class="d-flex align-items-center gap-2">
-                <a class="btn btn-outline-success btn-sm py-0 px-2" style="font-size:.74rem;"
-                   title="Download the rows below (current filters, columns, and sort applied)"
-                   href="{{ url_for('analytics.user_summary_export_csv') }}{% if request.query_string %}?{{ request.query_string.decode() }}{% endif %}">Export CSV</a>
+                {{ export_csv_chip(url_for('analytics.user_summary_export_csv') ~ ('?' ~ request.query_string.decode() if request.query_string else ''),
+                                   'Download the rows below (current filters, columns, and sort applied)') }}
                 <span class="badge bg-secondary" style="font-size:.75rem; font-weight:600;">{{ '{:,}'.format(rows) }}</span>
               </div>
             </div>

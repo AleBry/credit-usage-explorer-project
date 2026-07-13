@@ -7,13 +7,14 @@ isolation.
 """
 from __future__ import annotations
 
+from collections import OrderedDict
 from urllib.parse import urlencode
 
 import pandas as pd
 from flask import Blueprint, redirect, render_template, request, url_for
 
 from app.shared.chart_data import usage_type_weekly_json
-from app.shared.csv_export import csv_response
+from app.shared.csv_export import csv_response, labeled_export_df, range_slug
 from app.shared.data_store import CreditUsageData
 from .service import (
     DEFAULT_RECORD_COLUMNS,
@@ -38,6 +39,13 @@ def create_dashboard_blueprint(services) -> Blueprint:
 
     def data() -> CreditUsageData:
         return store.data
+
+    # Rendered records-tbody fragments, keyed by (dataset identity, query
+    # string). A new upload creates a new CreditUsageData object, so stale
+    # entries simply stop being hit and age out of the small LRU. Entries can
+    # reach ~14 MB (all ~19k rows), hence the tight cap.
+    _rows_html_cache: OrderedDict = OrderedDict()
+    _ROWS_HTML_CACHE_MAX = 4
 
     def _records_query_state(d: CreditUsageData):
         search_field = request.args.get("search_field", "any")
@@ -222,7 +230,28 @@ def create_dashboard_blueprint(services) -> Blueprint:
         state = _records_query_state(d)
         df = state["df"]
         selected_fields = state["selected_fields"]
-        columns, rows = build_record_view(df, selected_fields)
+        # All rows render by default; ?limit=N caps the table (the links next
+        # to the record count set it). The ~19k-row tbody costs ~0.8s to build
+        # + render but only changes with the data or the query, so the
+        # fragment is cached below; Export CSV is never capped or cached.
+        try:
+            render_limit = int(request.args.get("limit", 0))
+        except (TypeError, ValueError):
+            render_limit = 0
+
+        cache_key = (id(d), request.query_string.decode())
+        cached = _rows_html_cache.get(cache_key)
+        if cached is None:
+            capped_df = df.head(render_limit) if render_limit > 0 else df
+            columns, rows = build_record_view(capped_df, selected_fields)
+            rows_html = render_template("records_rows.html", rows=rows, columns=columns)
+            cached = (rows_html, len(rows), columns)
+            _rows_html_cache[cache_key] = cached
+            while len(_rows_html_cache) > _ROWS_HTML_CACHE_MAX:
+                _rows_html_cache.popitem(last=False)
+        else:
+            _rows_html_cache.move_to_end(cache_key)
+        rows_html, rows_shown, columns = cached
 
         def _options(col: str) -> list[str]:
             return (
@@ -239,7 +268,8 @@ def create_dashboard_blueprint(services) -> Blueprint:
             "index.html",
             toggle_columns=[record_column_meta(c) for c in d.columns] + [record_column_meta("tier")],
             columns=columns,
-            rows=rows,
+            rows_html=rows_html,
+            rows_shown=rows_shown,
             row_count=len(df),
             selected_fields=set(selected_fields),
             headers=list(d.columns) + ["tier"],
@@ -256,6 +286,10 @@ def create_dashboard_blueprint(services) -> Blueprint:
             sort_by=state["sort_by"],
             sort_order=state["sort_order"],
             export_url=_query_url("main.records_export_csv"),
+            limit_options=[
+                (n, _query_url("main.records_page", limit=n))
+                for n in (1000, 5000, 10000)
+            ] + [(0, _query_url("main.records_page", limit=0))],
             usage_type_options=_options("usage_type_parsed_type"),
             model_options=_options("usage_type_model"),
             tier_options=tier_options,
@@ -266,29 +300,17 @@ def create_dashboard_blueprint(services) -> Blueprint:
         d = data()
         state = _records_query_state(d)
         columns, rows = build_record_view(state["df"], state["selected_fields"])
-        export_df = pd.DataFrame(
-            [{c["label"]: row.get(c["key"]) for c in columns} for row in rows],
-            columns=[c["label"] for c in columns],
-        )
-        date_range = (
-            f"{state['start_date']}_to_{state['end_date']}"
-            if state["start_date"] or state["end_date"] else ""
-        )
-        credit_range = (
-            f"{state['min_credits'] or '0'}_to_{state['max_credits'] or 'max'}"
-            if state["min_credits"] or state["max_credits"] else ""
-        )
         search = (
             f"{state['search_field']}_{state['search_query']}"
             if state["search_query"] else ""
         )
         sort = f"{state['sort_by']}_{state['sort_order']}" if state["sort_by"] else ""
-        return csv_response(export_df, "records.csv", filters=[
+        return csv_response(labeled_export_df(rows, columns), "records.csv", filters=[
             ("type", state["usage_type"]),
             ("model", state["model"]),
-            ("dates", date_range),
+            ("dates", range_slug(state["start_date"], state["end_date"])),
             ("search", search),
-            ("credits", credit_range),
+            ("credits", range_slug(state["min_credits"], state["max_credits"], "0", "max")),
             ("zero", "only" if state["zero_credits"] == "1" else ""),
             ("sort", sort),
         ])

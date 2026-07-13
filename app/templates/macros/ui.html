@@ -1,0 +1,9 @@
+{#- Shared small UI pieces. -#}
+
+{#- Compact Export CSV chip used in table/card headers across the app.
+    href:  the export endpoint URL (with query args already encoded)
+    title: tooltip explaining exactly what gets downloaded -#}
+{% macro export_csv_chip(href, title) -%}
+<a class="btn btn-outline-success btn-sm py-0 px-2" style="font-size:.74rem;"
+   {% if title %}title="{{ title }}"{% endif %} href="{{ href }}">Export CSV</a>
+{%- endmacro %}
