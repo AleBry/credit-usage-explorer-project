@@ -701,9 +701,14 @@
                 <div>
                   <label class="form-label mb-1" style="font-size:.7rem;" title="Don't draw actual-remaining points before this date. Display only — forecasts are unaffected.">Hide before</label>
                   <input type="date" id="actual-cutoff" class="form-control form-control-sm" style="width:150px;"
-                         onchange="applyActualCutoff(this.value)">
+                         onchange="applyActualCutoffs()">
                 </div>
-                <button class="btn btn-link btn-sm p-0 text-muted" style="font-size:.72rem;" onclick="clearActualCutoff()">Clear</button>
+                <div>
+                  <label class="form-label mb-1" style="font-size:.7rem;" title="Don't draw actual-remaining points after this date. Display only — forecasts are unaffected.">Hide after</label>
+                  <input type="date" id="actual-cutoff-to" class="form-control form-control-sm" style="width:150px;"
+                         onchange="applyActualCutoffs()">
+                </div>
+                <button class="btn btn-link btn-sm p-0 text-muted" style="font-size:.72rem;" onclick="clearActualCutoffs()">Clear</button>
               </div>
             </div>
 
