@@ -1463,7 +1463,7 @@ if (typeof Chart !== 'undefined') {
         backgroundColor: showP10 ? 'rgba(253,126,20,0.18)' : 'transparent',
         fill: p90Fill,
         pointRadius: 0, tension: 0.1, spanGaps: false,
-        _mcOverlay: true, _mcBand: 'p90', _noTooltip: true, _noLegend: true,
+        _mcOverlay: true, _mcBand: 'p90', _noLegend: true,
       });
     }
     if (showP50) {
@@ -1483,7 +1483,7 @@ if (typeof Chart !== 'undefined') {
         borderColor: 'rgba(253,126,20,0.55)', borderWidth: 1.5, borderDash: [3, 3],
         backgroundColor: 'transparent', fill: false,
         pointRadius: 0, tension: 0.1, spanGaps: false,
-        _mcOverlay: true, _mcBand: 'p10', _noTooltip: true, _noLegend: true,
+        _mcOverlay: true, _mcBand: 'p10', _noLegend: true,
       });
     }
 
