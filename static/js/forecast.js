@@ -246,10 +246,12 @@ function updateBurndownOverlays() {
         const p50d = interpDateSeries(mc.p50,       allLabels);
         const p90d = interpDateSeries(mc.p90 || [], allLabels);
         const alpha = hexToRgba(color, 0.12);
+        // P90/P10 stay out of the legend but DO show in the hover tooltip so a
+        // snapshot's MC band reads as numbers, not just the P50 line.
         bc.data.datasets.push({
           label: snapLabel + ' · MC P90', data: p90d,
           borderColor: hexToRgba(color, 0.45), borderWidth: 1, borderDash: [2, 3],
-          backgroundColor: alpha, fill: '+2', tension: 0.1, pointRadius: 0, spanGaps: false, _snapOverlay: true, _noTooltip: true, _noLegend: true,
+          backgroundColor: alpha, fill: '+2', tension: 0.1, pointRadius: 0, spanGaps: false, _snapOverlay: true, _noLegend: true,
         });
         bc.data.datasets.push({
           label: snapLabel + ' · MC P50', data: p50d,
@@ -259,7 +261,7 @@ function updateBurndownOverlays() {
         bc.data.datasets.push({
           label: snapLabel + ' · MC P10', data: p10d,
           borderColor: hexToRgba(color, 0.45), borderWidth: 1, borderDash: [2, 3],
-          backgroundColor: 'transparent', fill: false, tension: 0.1, pointRadius: 0, spanGaps: false, _snapOverlay: true, _noTooltip: true, _noLegend: true,
+          backgroundColor: 'transparent', fill: false, tension: 0.1, pointRadius: 0, spanGaps: false, _snapOverlay: true, _noLegend: true,
         });
       }
 
@@ -1121,26 +1123,35 @@ if (typeof Chart !== 'undefined') {
     d => d.label === 'Actual remaining'
   );
 
-  // Trim: don't draw actual points before the chosen date.
-  window.applyActualCutoff = function (dateStr, persist = true) {
+  // Trim: don't draw actual points before / after the chosen dates. Reads
+  // both inputs so either bound (or both) can be active.
+  window.applyActualCutoffs = function (persist = true) {
     const bc = window.burndownChart;
     if (!bc) return;
     const idx = findActualDs();
     if (idx < 0) return;
-    const cut = (dateStr || '').trim();
+    const fromEl = document.getElementById('actual-cutoff');
+    const toEl = document.getElementById('actual-cutoff-to');
+    const before = ((fromEl && fromEl.value) || '').trim();
+    const after = ((toEl && toEl.value) || '').trim();
     if (persist) {
-      if (cut) localStorage.setItem('fc-actual-cutoff', cut);
+      if (before) localStorage.setItem('fc-actual-cutoff', before);
       else localStorage.removeItem('fc-actual-cutoff');
+      if (after) localStorage.setItem('fc-actual-cutoff-to', after);
+      else localStorage.removeItem('fc-actual-cutoff-to');
     }
     bc.data.datasets[idx].data = bc.data.labels.map(
-      l => (cut && l < cut) ? null : lookup(activeActualPts(), l)
+      l => ((before && l < before) || (after && l > after))
+        ? null : lookup(activeActualPts(), l)
     );
     bc.chart.update();
   };
-  window.clearActualCutoff = function () {
-    const el = document.getElementById('actual-cutoff');
-    if (el) el.value = '';
-    window.applyActualCutoff('');
+  window.clearActualCutoffs = function () {
+    ['actual-cutoff', 'actual-cutoff-to'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.value = '';
+    });
+    window.applyActualCutoffs();
   };
 
   // Hide the whole line. Sets dataset.hidden too so the fullscreen copy
@@ -1160,10 +1171,13 @@ if (typeof Chart !== 'undefined') {
   };
 
   (function () {
-    const cut = localStorage.getItem('fc-actual-cutoff') || '';
-    const cutEl = document.getElementById('actual-cutoff');
-    if (cutEl) cutEl.value = cut;
-    if (cut) window.applyActualCutoff(cut, false);
+    const before = localStorage.getItem('fc-actual-cutoff') || '';
+    const after = localStorage.getItem('fc-actual-cutoff-to') || '';
+    const fromEl = document.getElementById('actual-cutoff');
+    const toEl = document.getElementById('actual-cutoff-to');
+    if (fromEl) fromEl.value = before;
+    if (toEl) toEl.value = after;
+    if (before || after) window.applyActualCutoffs(false);
     if (localStorage.getItem('fc-actual-hidden') === '1') {
       window.toggleActualLine(false, false);
     }
